@@ -1,33 +1,69 @@
+"use client"
+
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { BookOpen, Users, Clock, TrendingUp } from "lucide-react"
+import { BookOpen, Users, Clock, TrendingUp, Loader2 } from "lucide-react"
 
 export function StatsCards() {
-  const stats = [
+  const [stats, setStats] = useState({
+    totalBooks: 0,
+    booksRead: 0,
+    booksReading: 0,
+    booksToRead: 0
+  })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL
+        // USANDO O ENDPOINT OTIMIZADO AGORA
+        const response = await fetch(`${API_URL}/api/v1/users/1/library/stats`)
+        
+        if (response.ok) {
+          const data = await response.json()
+          setStats(data)
+        }
+      } catch (error) {
+        console.error("Erro ao carregar estatísticas", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchStats()
+  }, [])
+
+  if (loading) {
+    return <div className="flex justify-center p-4"><Loader2 className="animate-spin text-primary" /></div>
+  }
+
+  const statItems = [
     {
       title: "Total de Livros",
-      value: "247",
-      description: "+12 este mês",
+      value: stats.totalBooks,
+      description: "Na sua estante",
       icon: BookOpen,
       color: "text-primary",
     },
     {
       title: "Livros Lidos",
-      value: "89",
-      description: "+5 este mês",
+      value: stats.booksRead,
+      description: "Concluídos",
       icon: TrendingUp,
       color: "text-secondary",
     },
     {
-      title: "Empréstimos Ativos",
-      value: "8",
-      description: "3 vencem esta semana",
+      title: "Lendo Agora",
+      value: stats.booksReading,
+      description: "Em andamento",
       icon: Clock,
       color: "text-accent-foreground",
     },
     {
-      title: "Amigos Conectados",
-      value: "34",
-      description: "+2 novos seguidores",
+      title: "Para Ler",
+      value: stats.booksToRead,
+      description: "Lista de desejos",
       icon: Users,
       color: "text-chart-4",
     },
@@ -35,7 +71,7 @@ export function StatsCards() {
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      {stats.map((stat) => {
+      {statItems.map((stat) => {
         const Icon = stat.icon
         return (
           <Card key={stat.title} className="hover:shadow-md transition-shadow">

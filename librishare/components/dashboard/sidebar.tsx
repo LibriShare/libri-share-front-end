@@ -1,153 +1,158 @@
 "use client"
+
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { BookOpen, Clock, CheckCircle, Heart, Users, Settings, Plus, Home, User } from "lucide-react"
-import { AddBookDialog } from "@/components/books/add-book-dialog"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { 
+  LayoutDashboard, 
+  Book, 
+  Clock, 
+  CheckCircle, 
+  Heart, 
+  Users, 
+  Settings, 
+  User 
+} from "lucide-react"
+import { useEffect, useState } from "react"
 
-interface SidebarProps {
-  className?: string
+interface LibraryStats {
+  totalBooks: number
+  booksRead: number
+  booksReading: number
+  booksToRead: number
+  activeLoans: number
 }
 
-export function Sidebar({ className }: SidebarProps) {
+export function Sidebar() {
   const pathname = usePathname()
+  const [stats, setStats] = useState<LibraryStats>({
+    totalBooks: 0,
+    booksRead: 0,
+    booksReading: 0,
+    booksToRead: 0,
+    activeLoans: 0
+  })
 
-  const menuItems = [
-    {
-      id: "dashboard",
-      label: "Dashboard",
-      icon: Home,
-      count: null,
-      href: "/dashboard",
-    },
-    {
-      id: "library",
-      label: "Minha Biblioteca",
-      icon: BookOpen,
-      count: 247,
-      href: "/library",
-    },
-    {
-      id: "reading",
-      label: "Lendo Agora",
-      icon: Clock,
-      count: 3,
-      href: "/reading",
-    },
-    {
-      id: "read",
-      label: "Livros Lidos",
-      icon: CheckCircle,
-      count: 89,
-      href: "/read",
-    },
-    {
-      id: "wishlist",
-      label: "Lista de Desejos",
-      icon: Heart,
-      count: 23,
-      href: "/wishlist",
-    },
-    {
-      id: "loans",
-      label: "Empréstimos",
-      icon: Users,
-      count: 8,
-      href: "/loans",
-    },
-  ]
+  const API_URL = process.env.NEXT_PUBLIC_API_URL
+  const USER_ID = 1 
 
-  const communityItems = [
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/v1/users/${USER_ID}/library/stats`)
+        if (response.ok) {
+          const data = await response.json()
+          setStats(data)
+        }
+      } catch (error) {
+        console.error("Erro ao buscar estatísticas:", error)
+      }
+    }
+
+    fetchStats()
+  }, [API_URL])
+
+  const sidebarItems = [
     {
-      id: "community",
-      label: "LibriConnect",
-      icon: Users,
-      count: null,
-      href: "/community",
+      title: "Biblioteca",
+      items: [
+        {
+          title: "Dashboard",
+          href: "/dashboard",
+          icon: LayoutDashboard,
+          variant: "default",
+        },
+        {
+          title: "Minha Biblioteca",
+          href: "/library",
+          icon: Book,
+          variant: "ghost",
+          count: stats.totalBooks, 
+        },
+        {
+          title: "Lendo Agora",
+          href: "/reading",
+          icon: Clock,
+          variant: "ghost",
+          count: stats.booksReading,
+        },
+        {
+          title: "Livros Lidos",
+          href: "/read",
+          icon: CheckCircle,
+          variant: "ghost",
+          count: stats.booksRead,
+        },
+        {
+          title: "Lista de Desejos",
+          href: "/wishlist",
+          icon: Heart,
+          variant: "ghost",
+          count: stats.booksToRead,
+        },
+        {
+          title: "Empréstimos",
+          href: "/loans",
+          icon: Users,
+          variant: "ghost",
+          count: stats.activeLoans,
+        },
+      ],
+    },
+    {
+      title: "Conta", // Nome alterado de "Social" para "Conta"
+      items: [
+        {
+          title: "Perfil",
+          href: "/profile",
+          icon: User,
+          variant: "ghost",
+        },
+        {
+          title: "Configurações",
+          href: "/settings",
+          icon: Settings,
+          variant: "ghost",
+        },
+      ],
     },
   ]
 
   return (
-    <div className={cn("pb-12 w-64", className)}>
+    <nav className="pb-12 w-64 flex-shrink-0 border-r bg-card/50 h-screen overflow-y-auto">
       <div className="space-y-4 py-4">
-        {/* Quick Actions */}
         <div className="px-3 py-2">
-          <AddBookDialog
-            trigger={
-              <Button className="w-full justify-start" size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                Adicionar Livro
-              </Button>
-            }
-          />
-        </div>
-
-        {/* Main Navigation */}
-        <div className="px-3 py-2">
-          <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Biblioteca</h2>
-          <div className="space-y-1">
-            {menuItems.map((item) => {
-              const Icon = item.icon
-              const isActive = pathname === item.href
-              return (
-                <Link key={item.id} href={item.href}>
-                  <Button variant={isActive ? "secondary" : "ghost"} className="w-full justify-start">
-                    <Icon className="mr-2 h-4 w-4" />
-                    {item.label}
-                    {item.count && (
-                      <Badge variant="secondary" className="ml-auto">
-                        {item.count}
-                      </Badge>
-                    )}
-                  </Button>
-                </Link>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Community Section */}
-        <div className="px-3 py-2">
-          <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Social</h2>
-          <div className="space-y-1">
-            {communityItems.map((item) => {
-              const Icon = item.icon
-              const isActive = pathname === item.href
-              return (
-                <Link key={item.id} href={item.href}>
-                  <Button variant={isActive ? "secondary" : "ghost"} className="w-full justify-start">
-                    <Icon className="mr-2 h-4 w-4" />
-                    {item.label}
-                    {item.count && (
-                      <Badge variant="secondary" className="ml-auto">
-                        {item.count}
-                      </Badge>
-                    )}
-                  </Button>
-                </Link>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Settings */}
-        <div className="px-3 py-2">
-          <Link href="/profile">
-            <Button variant={pathname === "/profile" ? "secondary" : "ghost"} className="w-full justify-start mb-2">
-              <User className="mr-2 h-4 w-4" />
-              Perfil
-            </Button>
-          </Link>
-          <Link href="/settings">
-            <Button variant={pathname === "/settings" ? "secondary" : "ghost"} className="w-full justify-start">
-              <Settings className="mr-2 h-4 w-4" />
-              Configurações
-            </Button>
-          </Link>
+          {sidebarItems.map((group, i) => (
+            <div key={i} className="mb-8">
+              <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">{group.title}</h2>
+              <div className="space-y-1">
+                {group.items.map((item, j) => (
+                  <Link key={j} href={item.href}>
+                    <Button
+                      variant={pathname === item.href ? "secondary" : "ghost"}
+                      className={cn("w-full justify-start relative", pathname === item.href && "bg-secondary")}
+                    >
+                      <item.icon className="mr-2 h-4 w-4" />
+                      {item.title}
+                      {item.count !== undefined && (
+                        <span className={cn(
+                          "ml-auto text-xs rounded-full px-2 py-0.5",
+                          pathname === item.href 
+                            ? "bg-background text-foreground" 
+                            : "bg-primary/10 text-primary"
+                        )}>
+                          {item.count}
+                        </span>
+                      )}
+                    </Button>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
-    </div>
+    </nav>
   )
 }

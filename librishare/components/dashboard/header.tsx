@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Search, Bell, Settings, LogOut, User } from "lucide-react"
-import { ThemeToggle } from "@/components/theme/theme-toggle"
+// Removido o import do ThemeToggle
 import Image from "next/image"
 import Link from "next/link"
 
@@ -47,8 +47,7 @@ export function Header() {
 
         {/* Actions */}
         <div className="flex items-center gap-2">
-          {/* Theme Toggle Button */}
-          <ThemeToggle />
+          {/* Botão de Tema REMOVIDO aqui */}
 
           <Button variant="ghost" size="icon" className="relative">
             <Bell className="h-4 w-4" />

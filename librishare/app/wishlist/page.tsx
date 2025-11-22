@@ -1,125 +1,193 @@
+"use client"
+
+import { useState, useEffect } from "react"
 import { Sidebar } from "@/components/dashboard/sidebar"
-import { Header } from "@/components/dashboard/header"
+import { DashboardHeader } from "@/components/dashboard/header"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Heart, ShoppingCart, Star, DollarSign } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter
+} from "@/components/ui/dialog"
+import { 
+  ShoppingCart, 
+  Trash2,
+  BookOpen,
+  Plus,
+  Loader2
+} from "lucide-react"
 import Image from "next/image"
+import { useToast } from "@/hooks/use-toast"
+
+interface WishlistBook {
+  id: number
+  bookId: number
+  title: string
+  author: string
+  cover: string
+  addedDate: string
+  price?: string 
+}
 
 export default function WishlistPage() {
-  const wishlistBooks = [
-    {
-      id: 1,
-      title: "Atomic Habits",
-      author: "James Clear",
-      cover: "/atomic-habits-cover.png",
-      price: "R$ 45,90",
-      rating: 4.8,
-      priority: "alta",
-      addedDate: "2024-01-05",
-    },
-    {
-      id: 2,
-      title: "The Psychology of Money",
-      author: "Morgan Housel",
-      cover: "/psychology-of-money-book-cover.jpg",
-      price: "R$ 38,50",
-      rating: 4.6,
-      priority: "média",
-      addedDate: "2024-01-03",
-    },
-    {
-      id: 3,
-      title: "Educated",
-      author: "Tara Westover",
-      cover: "/educated-book-cover-memoir.jpg",
-      price: "R$ 42,00",
-      rating: 4.9,
-      priority: "baixa",
-      addedDate: "2023-12-28",
-    },
-  ]
+  const [books, setBooks] = useState<WishlistBook[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  // Formulário
+  const [newTitle, setNewTitle] = useState("")
+  const [newAuthor, setNewAuthor] = useState("")
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "alta":
-        return "bg-red-100 text-red-800"
-      case "média":
-        return "bg-yellow-100 text-yellow-800"
-      case "baixa":
-        return "bg-green-100 text-green-800"
-      default:
-        return "bg-gray-100 text-gray-800"
+  const { toast } = useToast()
+  const API_URL = process.env.NEXT_PUBLIC_API_URL
+  const USER_ID = 1
+
+  const fetchWishlist = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch(`${API_URL}/api/v1/users/${USER_ID}/library`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        // Filtra APENAS status 'WANT_TO_READ'
+        const wishlist = data
+          .filter((item: any) => item.status === 'WANT_TO_READ')
+          .map((item: any) => ({
+            id: item.id,
+            bookId: item.bookId,
+            title: item.title,
+            author: item.author,
+            cover: item.coverImageUrl || "/placeholder.svg",
+            addedDate: item.addedAt,
+            price: "0,00" // Mock visual
+          }))
+        setBooks(wishlist)
+      }
+    } catch (error) {
+      console.error("Erro wishlist:", error)
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
+    fetchWishlist()
+  }, [API_URL])
+
+  const handleAddWish = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+
+    try {
+      // 1. Cria Livro no Catálogo
+      const bookRes = await fetch(`${API_URL}/api/v1/books`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            title: newTitle,
+            author: newAuthor || "Desconhecido",
+            isbn: null, 
+            coverImageUrl: "/placeholder.svg"
+        })
+      })
+
+      let bookId;
+      if (bookRes.ok) {
+         const bookData = await bookRes.json()
+         bookId = bookData.id
+      } else if (bookRes.status === 409) {
+          // Se já existe, não temos como pegar o ID fácil aqui sem busca. 
+          // Simplificação: Avisar erro. (Ideal seria buscar pelo título)
+          toast({ title: "Erro", description: "Livro já existe no catálogo, tente buscar.", variant: "destructive" })
+          setIsSubmitting(false)
+          return;
+      }
+
+      // 2. Adiciona à Biblioteca como WANT_TO_READ
+      if (bookId) {
+          const libRes = await fetch(`${API_URL}/api/v1/users/${USER_ID}/library`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bookId: bookId, status: "WANT_TO_READ" })
+          })
+          
+          if (libRes.ok) {
+              toast({ title: "Adicionado!", description: "Livro na lista de desejos." })
+              setNewTitle("")
+              setNewAuthor("")
+              setIsDialogOpen(false)
+              fetchWishlist() // RECARREGA A LISTA
+          }
+      }
+
+    } catch (error) {
+      toast({ title: "Erro", variant: "destructive" })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleDelete = async (id: number) => {
+      await fetch(`${API_URL}/api/v1/users/${USER_ID}/library/${id}`, { method: "DELETE" })
+      fetchWishlist()
+      toast({ title: "Removido." })
   }
 
   return (
     <div className="flex h-screen bg-background">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header />
+        <DashboardHeader />
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-7xl mx-auto">
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold text-foreground mb-2">Lista de Desejos</h1>
-              <p className="text-muted-foreground">Livros que você deseja ler no futuro</p>
+          <div className="max-w-7xl mx-auto space-y-6">
+            
+            <div className="flex justify-between items-center">
+              <h1 className="text-3xl font-bold">Lista de Desejos</h1>
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4"/> Novo Desejo</Button></DialogTrigger>
+                <DialogContent>
+                    <DialogHeader><DialogTitle>Adicionar Desejo</DialogTitle></DialogHeader>
+                    <form onSubmit={handleAddWish} className="space-y-4">
+                        <div><Label>Título</Label><Input value={newTitle} onChange={e=>setNewTitle(e.target.value)} required/></div>
+                        <div><Label>Autor</Label><Input value={newAuthor} onChange={e=>setNewAuthor(e.target.value)} required/></div>
+                        <Button type="submit" disabled={isSubmitting} className="w-full">{isSubmitting ? "Salvando..." : "Adicionar"}</Button>
+                    </form>
+                </DialogContent>
+              </Dialog>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {wishlistBooks.map((book) => (
-                <Card key={book.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                  <CardContent className="p-4">
-                    <div className="space-y-4">
-                      <div className="flex gap-4">
-                        <div className="flex-shrink-0">
-                          <Image
-                            src={book.cover || "/placeholder.svg"}
-                            alt={book.title}
-                            width={80}
-                            height={120}
-                            className="rounded-lg shadow-sm"
-                          />
+            {loading ? <div className="flex justify-center p-10"><Loader2 className="animate-spin"/></div> : 
+             books.length === 0 ? 
+             <div className="text-center py-20 border-2 border-dashed rounded-lg"><BookOpen className="h-12 w-12 mx-auto opacity-20"/><p>Sua lista está vazia.</p></div> 
+             : 
+             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {books.map(book => (
+                    <Card key={book.id} className="flex flex-row overflow-hidden h-40">
+                        <div className="w-28 relative bg-muted">
+                            <Image src={book.cover} alt={book.title} fill className="object-cover"/>
                         </div>
-
-                        <div className="flex-1 space-y-2">
-                          <div>
-                            <h3 className="font-semibold text-foreground line-clamp-2">{book.title}</h3>
-                            <p className="text-sm text-muted-foreground">{book.author}</p>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-1">
-                              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                              <span className="text-sm">{book.rating}</span>
+                        <CardContent className="flex-1 p-4 flex flex-col justify-between">
+                            <div>
+                                <h3 className="font-bold line-clamp-1">{book.title}</h3>
+                                <p className="text-sm text-muted-foreground">{book.author}</p>
                             </div>
-                            <Badge className={getPriorityColor(book.priority)}>{book.priority}</Badge>
-                          </div>
-
-                          <div className="flex items-center gap-1 text-lg font-semibold text-green-600">
-                            <DollarSign className="h-4 w-4" />
-                            <span>{book.price}</span>
-                          </div>
-
-                          <p className="text-xs text-muted-foreground">
-                            Adicionado em {new Date(book.addedDate).toLocaleDateString("pt-BR")}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <Button size="sm" className="flex-1">
-                          <ShoppingCart className="h-4 w-4 mr-1" />
-                          Comprar
-                        </Button>
-                        <Button size="sm" variant="outline">
-                          <Heart className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                            <div className="flex gap-2">
+                                <Button size="sm" className="flex-1"><ShoppingCart className="mr-2 h-4 w-4"/> Comprar</Button>
+                                <Button size="icon" variant="ghost" onClick={() => handleDelete(book.id)}><Trash2 className="h-4 w-4 text-red-500"/></Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                ))}
+             </div>
+            }
           </div>
         </main>
       </div>

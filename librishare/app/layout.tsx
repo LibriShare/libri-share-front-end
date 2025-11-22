@@ -9,7 +9,7 @@ import "./globals.css"
 
 export const metadata: Metadata = {
   title: "LibriShare - Connect, Catalog, Discover",
-  description: "A complete platform for book management and sharing among reading enthusiasts",
+  description: "A complete platform for book management",
   generator: "v0.app",
 }
 
@@ -19,9 +19,16 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" suppressHydrationWarning>
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable} antialiased`}>
-        <ThemeProvider defaultTheme="system" storageKey="librishare-ui-theme">
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark" 
+          forcedTheme="dark" // <--- ISSO OBRIGA O MODO ESCURO
+          enableSystem={false}
+          disableTransitionOnChange
+          storageKey="librishare-ui-theme"
+        >
           <Suspense fallback={null}>{children}</Suspense>
         </ThemeProvider>
         <Analytics />
