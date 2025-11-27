@@ -6,20 +6,18 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Search, Grid, List, Star, Clock, CheckCircle, BookOpen, Loader2 } from "lucide-react"
+import { Search, Grid, List, Star, Clock, CheckCircle, BookOpen, Loader2, Bookmark } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 import { useToast } from "@/hooks/use-toast"
 
 interface Book {
-  id: string       // ID da entrada na biblioteca (userBookId)
-  bookId: string   // ID do livro no catálogo
+  id: string
+  bookId: string
   title: string
   author: string
   cover: string
-  status: "read" | "reading" | "to-read"
+  status: "read" | "reading" | "tbr" // Adicionado "tbr" (To Be Read)
   rating?: number
   genre: string
   pages: number
@@ -35,34 +33,32 @@ export function LibraryGrid() {
   
   const API_URL = process.env.NEXT_PUBLIC_API_URL
 
-  // --- BUSCAR LIVROS DA API ---
   useEffect(() => {
     const fetchLibrary = async () => {
       try {
         setLoading(true)
-        // Busca a biblioteca do usuário 1
         const response = await fetch(`${API_URL}/api/v1/users/1/library`)
         if (response.ok) {
           const data = await response.json()
           
-          // Transforma o DTO do Java no formato que o Front espera
-          const mappedBooks: Book[] = data.map((item: any) => ({
-            id: item.id.toString(),      // ID do UserBook
-            bookId: item.bookId.toString(), // ID do Livro Original
+          // Filtra: Mostra tudo que NÃO é Lista de Desejos (ou seja: Lidos, Lendo e Para Ler)
+          const myBooks = data.filter((item: any) => item.status !== "WANT_TO_READ");
+
+          const mappedBooks: Book[] = myBooks.map((item: any) => ({
+            id: item.id.toString(),
+            bookId: item.bookId.toString(),
             title: item.title,
             author: item.author,
             cover: item.coverImageUrl || "/placeholder.svg",
-            // Mapeia o ENUM do Java para o status do Front
             status: mapStatus(item.status),
             rating: item.rating,
-            genre: "Geral", // O endpoint de library não traz gênero ainda
-            pages: 0 // O endpoint de library não traz páginas ainda
+            genre: "Geral",
+            pages: 0
           }))
           setBooks(mappedBooks)
         }
       } catch (error) {
-        console.error("Erro ao buscar biblioteca:", error)
-        toast({ title: "Erro", description: "Não foi possível carregar sua biblioteca.", variant: "destructive" })
+        console.error(error)
       } finally {
         setLoading(false)
       }
@@ -71,13 +67,12 @@ export function LibraryGrid() {
     fetchLibrary()
   }, [])
 
-  // Helper para traduzir status
-  const mapStatus = (backendStatus: string): "read" | "reading" | "to-read" => {
+  const mapStatus = (backendStatus: string): "read" | "reading" | "tbr" => {
     switch (backendStatus) {
       case "READ": return "read"
       case "READING": return "reading"
-      case "WANT_TO_READ": return "to-read"
-      default: return "to-read"
+      case "TO_READ": return "tbr" // Mapeia o novo status do backend
+      default: return "tbr"
     }
   }
 
@@ -93,6 +88,7 @@ export function LibraryGrid() {
     switch (status) {
       case "read": return <CheckCircle className="h-4 w-4 text-secondary" />
       case "reading": return <Clock className="h-4 w-4 text-primary" />
+      case "tbr": return <Bookmark className="h-4 w-4 text-indigo-500" /> // Ícone para "Para Ler"
       default: return null
     }
   }
@@ -101,7 +97,7 @@ export function LibraryGrid() {
     switch (status) {
       case "read": return "Lido"
       case "reading": return "Lendo"
-      case "to-read": return "Para Ler"
+      case "tbr": return "Para Ler"
       default: return status
     }
   }
@@ -110,7 +106,7 @@ export function LibraryGrid() {
     switch (status) {
       case "read": return "bg-secondary/10 text-secondary-foreground border-secondary/20"
       case "reading": return "bg-primary/10 text-primary-foreground border-primary/20"
-      case "to-read": return "bg-accent/10 text-accent-foreground border-accent/20"
+      case "tbr": return "bg-indigo-500/10 text-indigo-600 border-indigo-500/20" // Cor distinta
       default: return "bg-muted"
     }
   }
@@ -129,17 +125,10 @@ export function LibraryGrid() {
     )
   }
 
-  if (loading) {
-    return (
-        <div className="flex justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-    )
-  }
+  if (loading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
 
   return (
     <div className="space-y-6">
-      {/* Filters and Search */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div className="flex flex-col sm:flex-row gap-3 flex-1">
           <div className="relative flex-1 max-w-sm">
@@ -153,14 +142,14 @@ export function LibraryGrid() {
           </div>
 
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Status" />
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Filtrar por Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="read">Lidos</SelectItem>
-              <SelectItem value="reading">Lendo</SelectItem>
-              <SelectItem value="to-read">Para Ler</SelectItem>
+              <SelectItem value="all">Todos os Livros</SelectItem>
+              <SelectItem value="reading">📖 Lendo Agora</SelectItem>
+              <SelectItem value="tbr">📚 Para Ler</SelectItem>
+              <SelectItem value="read">✅ Lidos</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -175,12 +164,10 @@ export function LibraryGrid() {
         </div>
       </div>
 
-      {/* Results Count */}
       <div className="text-sm text-muted-foreground">
         {filteredBooks.length} {filteredBooks.length === 1 ? "livro encontrado" : "livros encontrados"}
       </div>
 
-      {/* Books Grid */}
       {viewMode === "grid" ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {filteredBooks.map((book) => (
@@ -268,7 +255,7 @@ export function LibraryGrid() {
       {filteredBooks.length === 0 && !loading && (
         <div className="text-center py-12 border-2 border-dashed rounded-lg">
             <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-20" />
-            <p className="text-muted-foreground">Sua estante está vazia ou nenhum livro corresponde à busca.</p>
+            <p className="text-muted-foreground">Nenhum livro encontrado com este filtro.</p>
         </div>
       )}
     </div>

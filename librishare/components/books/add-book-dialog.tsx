@@ -61,7 +61,7 @@ export function AddBookDialog({ trigger }: AddBookDialogProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           bookId: bookId,
-          status: "WANT_TO_READ"
+          status: "TO_READ" // <--- MUDAR DE "WANT_TO_READ" PARA "TO_READ"
         })
       })
 
@@ -77,7 +77,7 @@ export function AddBookDialog({ trigger }: AddBookDialogProps) {
     } catch (error) {
       console.error(error)
     }
-  }
+  } 
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

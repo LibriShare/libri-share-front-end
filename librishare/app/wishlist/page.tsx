@@ -5,7 +5,6 @@ import { Sidebar } from "@/components/dashboard/sidebar"
 import { DashboardHeader } from "@/components/dashboard/header"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -14,16 +13,20 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter
 } from "@/components/ui/dialog"
 import { 
   ShoppingCart, 
   Trash2,
   BookOpen,
   Plus,
-  Loader2
+  Loader2,
+  ExternalLink,
+  DollarSign,
+  Link as LinkIcon,
+  ImageIcon
 } from "lucide-react"
 import Image from "next/image"
+import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 
 interface WishlistBook {
@@ -33,7 +36,8 @@ interface WishlistBook {
   author: string
   cover: string
   addedDate: string
-  price?: string 
+  price?: number
+  purchaseUrl?: string
 }
 
 export default function WishlistPage() {
@@ -42,9 +46,11 @@ export default function WishlistPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   
-  // Formulário
   const [newTitle, setNewTitle] = useState("")
   const [newAuthor, setNewAuthor] = useState("")
+  const [newImage, setNewImage] = useState("") 
+  const [newPrice, setNewPrice] = useState("")
+  const [newLink, setNewLink] = useState("")
 
   const { toast } = useToast()
   const API_URL = process.env.NEXT_PUBLIC_API_URL
@@ -57,7 +63,7 @@ export default function WishlistPage() {
       
       if (response.ok) {
         const data = await response.json()
-        // Filtra APENAS status 'WANT_TO_READ'
+        
         const wishlist = data
           .filter((item: any) => item.status === 'WANT_TO_READ')
           .map((item: any) => ({
@@ -67,9 +73,22 @@ export default function WishlistPage() {
             author: item.author,
             cover: item.coverImageUrl || "/placeholder.svg",
             addedDate: item.addedAt,
-            price: "0,00" // Mock visual
+            price: 0, 
+            purchaseUrl: ""
           }))
-        setBooks(wishlist)
+          
+        const enrichedWishlist = await Promise.all(wishlist.map(async (book: any) => {
+            try {
+                const bookRes = await fetch(`${API_URL}/api/v1/books/${book.bookId}`)
+                if(bookRes.ok) {
+                    const bookDetails = await bookRes.json()
+                    return { ...book, price: bookDetails.price, purchaseUrl: bookDetails.purchaseUrl }
+                }
+            } catch(e) { return book }
+            return book
+        }))
+
+        setBooks(enrichedWishlist)
       }
     } catch (error) {
       console.error("Erro wishlist:", error)
@@ -85,17 +104,16 @@ export default function WishlistPage() {
   const handleAddWish = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
-
     try {
-      // 1. Cria Livro no Catálogo
       const bookRes = await fetch(`${API_URL}/api/v1/books`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             title: newTitle,
             author: newAuthor || "Desconhecido",
-            isbn: null, 
-            coverImageUrl: "/placeholder.svg"
+            coverImageUrl: newImage || "/placeholder.svg", 
+            price: newPrice ? parseFloat(newPrice) : null,
+            purchaseUrl: newLink
         })
       })
 
@@ -104,14 +122,11 @@ export default function WishlistPage() {
          const bookData = await bookRes.json()
          bookId = bookData.id
       } else if (bookRes.status === 409) {
-          // Se já existe, não temos como pegar o ID fácil aqui sem busca. 
-          // Simplificação: Avisar erro. (Ideal seria buscar pelo título)
-          toast({ title: "Erro", description: "Livro já existe no catálogo, tente buscar.", variant: "destructive" })
+          toast({ title: "Erro", description: "Livro já existe no catálogo.", variant: "destructive" })
           setIsSubmitting(false)
           return;
       }
 
-      // 2. Adiciona à Biblioteca como WANT_TO_READ
       if (bookId) {
           const libRes = await fetch(`${API_URL}/api/v1/users/${USER_ID}/library`, {
             method: "POST",
@@ -120,14 +135,16 @@ export default function WishlistPage() {
           })
           
           if (libRes.ok) {
-              toast({ title: "Adicionado!", description: "Livro na lista de desejos." })
+              toast({ title: "Adicionado!" })
               setNewTitle("")
               setNewAuthor("")
+              setNewImage("")
+              setNewPrice("")
+              setNewLink("")
               setIsDialogOpen(false)
-              fetchWishlist() // RECARREGA A LISTA
+              fetchWishlist()
           }
       }
-
     } catch (error) {
       toast({ title: "Erro", variant: "destructive" })
     } finally {
@@ -135,56 +152,151 @@ export default function WishlistPage() {
     }
   }
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (e: React.MouseEvent, id: number) => {
+      e.preventDefault()
+      e.stopPropagation()
       await fetch(`${API_URL}/api/v1/users/${USER_ID}/library/${id}`, { method: "DELETE" })
       fetchWishlist()
       toast({ title: "Removido." })
   }
 
+  const handleBuyClick = (e: React.MouseEvent, url?: string) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (url) window.open(url, '_blank')
+      else toast({ title: "Sem link", variant: "secondary" })
+  }
+
   return (
-    <div className="flex h-screen bg-background">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex h-screen bg-background w-full">
+      <div className="hidden lg:block">
+        <Sidebar />
+      </div>
+      
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <DashboardHeader />
         <main className="flex-1 overflow-y-auto p-6">
           <div className="max-w-7xl mx-auto space-y-6">
             
             <div className="flex justify-between items-center">
-              <h1 className="text-3xl font-bold">Lista de Desejos</h1>
+              <h1 className="text-3xl font-bold tracking-tight">Lista de Desejos</h1>
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4"/> Novo Desejo</Button></DialogTrigger>
-                <DialogContent>
-                    <DialogHeader><DialogTitle>Adicionar Desejo</DialogTitle></DialogHeader>
-                    <form onSubmit={handleAddWish} className="space-y-4">
-                        <div><Label>Título</Label><Input value={newTitle} onChange={e=>setNewTitle(e.target.value)} required/></div>
-                        <div><Label>Autor</Label><Input value={newAuthor} onChange={e=>setNewAuthor(e.target.value)} required/></div>
-                        <Button type="submit" disabled={isSubmitting} className="w-full">{isSubmitting ? "Salvando..." : "Adicionar"}</Button>
+                <DialogContent className="sm:max-w-[500px] w-[95vw]">
+                    <DialogHeader>
+                        <DialogTitle>Adicionar Desejo</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleAddWish} className="space-y-4 py-4">
+                        <div className="grid gap-4">
+                            <div className="space-y-2">
+                                <Label>Título *</Label>
+                                <Input value={newTitle} onChange={e=>setNewTitle(e.target.value)} required placeholder="Ex: Harry Potter" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Autor *</Label>
+                                <Input value={newAuthor} onChange={e=>setNewAuthor(e.target.value)} required placeholder="Ex: J.K. Rowling" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>URL da Capa (Opcional)</Label>
+                                <div className="relative">
+                                    <ImageIcon className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                    <Input 
+                                        className="pl-8"
+                                        value={newImage} 
+                                        onChange={e=>setNewImage(e.target.value)} 
+                                        placeholder="https://exemplo.com/capa.jpg" 
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Preço (R$)</Label>
+                                <div className="relative">
+                                    <DollarSign className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                    <Input 
+                                        className="pl-8" 
+                                        type="number" 
+                                        step="0.01" 
+                                        placeholder="0.00" 
+                                        value={newPrice} 
+                                        onChange={e => setNewPrice(e.target.value)} 
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Link de Compra</Label>
+                                <div className="relative">
+                                    <LinkIcon className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                    <Input 
+                                        className="pl-8" 
+                                        placeholder="https://amazon..." 
+                                        value={newLink} 
+                                        onChange={e => setNewLink(e.target.value)} 
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <Button type="submit" disabled={isSubmitting} className="w-full mt-4">
+                            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Adicionar à Lista"}
+                        </Button>
                     </form>
                 </DialogContent>
               </Dialog>
             </div>
 
-            {loading ? <div className="flex justify-center p-10"><Loader2 className="animate-spin"/></div> : 
+            {loading ? <div className="flex justify-center p-10"><Loader2 className="animate-spin text-primary h-8 w-8"/></div> : 
              books.length === 0 ? 
-             <div className="text-center py-20 border-2 border-dashed rounded-lg"><BookOpen className="h-12 w-12 mx-auto opacity-20"/><p>Sua lista está vazia.</p></div> 
+             <div className="text-center py-20 border-2 border-dashed rounded-lg border-muted"><BookOpen className="h-12 w-12 mx-auto opacity-20"/><p className="text-muted-foreground mt-2">Sua lista está vazia.</p></div> 
              : 
              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {books.map(book => (
-                    <Card key={book.id} className="flex flex-row overflow-hidden h-40">
-                        <div className="w-28 relative bg-muted">
-                            <Image src={book.cover} alt={book.title} fill className="object-cover"/>
-                        </div>
-                        <CardContent className="flex-1 p-4 flex flex-col justify-between">
-                            <div>
-                                <h3 className="font-bold line-clamp-1">{book.title}</h3>
-                                <p className="text-sm text-muted-foreground">{book.author}</p>
+                    <Link href={`/books/${book.bookId}`} key={book.id} className="block group">
+                        {/* --- CORREÇÃO NO LAYOUT DO CARD --- */}
+                        {/* Removi a altura fixa (h-48) e adicionei min-height (min-h-[12rem]) para crescer se precisar */}
+                        <Card className="flex flex-row overflow-hidden min-h-[12rem] hover:shadow-lg transition-all duration-200 cursor-pointer relative border-muted/60 bg-card hover:bg-accent/5">
+                            
+                            <div className="w-32 relative flex-shrink-0 flex items-center justify-center bg-transparent ml-3 my-3 rounded-md overflow-hidden">
+                                <Image 
+                                    src={book.cover} 
+                                    alt={book.title} 
+                                    fill 
+                                    className="object-contain rounded-sm" 
+                                />
                             </div>
-                            <div className="flex gap-2">
-                                <Button size="sm" className="flex-1"><ShoppingCart className="mr-2 h-4 w-4"/> Comprar</Button>
-                                <Button size="icon" variant="ghost" onClick={() => handleDelete(book.id)}><Trash2 className="h-4 w-4 text-red-500"/></Button>
-                            </div>
-                        </CardContent>
-                    </Card>
+                            
+                            <CardContent className="flex-1 p-5 flex flex-col justify-between min-w-0">
+                                <div>
+                                    <h3 className="font-bold line-clamp-2 text-lg text-foreground group-hover:text-primary transition-colors leading-tight mb-1">{book.title}</h3>
+                                    <p className="text-sm text-muted-foreground line-clamp-1">{book.author}</p>
+                                    
+                                    {book.price ? (
+                                        <div className="pt-2">
+                                            <span className="text-lg font-bold text-emerald-500">R$ {Number(book.price).toFixed(2).replace('.', ',')}</span>
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground pt-2 italic">Preço não definido</p>
+                                    )}
+                                </div>
+                                
+                                {/* Botões alinhados no fundo com mais espaço */}
+                                <div className="flex gap-3 mt-4">
+                                    <Button 
+                                        size="sm" 
+                                        className={`flex-1 h-9 font-medium ${!book.purchaseUrl ? 'opacity-50' : ''}`} 
+                                        onClick={(e) => handleBuyClick(e, book.purchaseUrl)}
+                                        variant={book.purchaseUrl ? "default" : "secondary"}
+                                    >
+                                        {book.purchaseUrl ? <ShoppingCart className="mr-2 h-4 w-4"/> : <ExternalLink className="mr-2 h-4 w-4"/>}
+                                        {book.purchaseUrl ? "Comprar" : "Sem Link"}
+                                    </Button>
+                                    <Button size="icon" variant="ghost" className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={(e) => handleDelete(e, book.id)}>
+                                        <Trash2 className="h-4 w-4"/>
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </Link>
                 ))}
              </div>
             }

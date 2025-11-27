@@ -1,7 +1,6 @@
 "use client"
 
-import type React from "react"
-import { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -26,44 +25,40 @@ import {
   Search, 
   MessageSquare, 
   Loader2, 
-  Calendar,
-  MoreHorizontal
+  Calendar as CalendarIcon,
+  Mail,
+  RefreshCcw
 } from "lucide-react"
-import { format, isPast, parseISO } from "date-fns"
-import { ptBR } from "date-fns/locale"
+import { format, isPast, parseISO, differenceInDays } from "date-fns"
 import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
 
 // --- Interfaces ---
-interface Book {
+interface BookOption {
   bookId: number
   title: string
-  coverImageUrl: string
-  author: string
+  author?: string 
 }
 
 interface Loan {
   id: number
-  userBook: {
-    book: {
-      title: string
-      coverImageUrl: string
-      author: string
-    }
-  }
+  bookId: number       
+  bookTitle: string   
+  bookAuthor?: string // Tornado opcional para evitar quebra se o backend não enviar
+  bookCoverUrl: string 
   borrowerName: string
   borrowerEmail: string
   loanDate: string
   dueDate: string
   returnDate?: string
-  status: string // "ACTIVE" | "RETURNED"
+  status: string 
   notes?: string
 }
 
 export function LoanManagement() {
   // --- Estados ---
   const [loans, setLoans] = useState<Loan[]>([])
-  const [userBooks, setUserBooks] = useState<Book[]>([])
+  const [availableBooks, setAvailableBooks] = useState<BookOption[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [showNewLoanDialog, setShowNewLoanDialog] = useState(false)
@@ -76,7 +71,6 @@ export function LoanManagement() {
   const [selectedBookId, setSelectedBookId] = useState("")
   const [borrowerName, setBorrowerName] = useState("")
   const [borrowerEmail, setBorrowerEmail] = useState("")
-  const [borrowerPhone, setBorrowerPhone] = useState("") // Novo campo visual
   const [dueDate, setDueDate] = useState("")
   const [notes, setNotes] = useState("")
 
@@ -84,78 +78,85 @@ export function LoanManagement() {
   const API_URL = process.env.NEXT_PUBLIC_API_URL
   const USER_ID = 1
 
+  // Função de busca isolada para permitir recarregamento manual
+  const fetchLoans = useCallback(async () => {
+    setLoading(true)
+    try {
+      // Adicionado headers para evitar cache do navegador
+      const response = await fetch(`${API_URL}/api/v1/users/${USER_ID}/loans`, {
+        headers: { 'Cache-Control': 'no-cache' } 
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setLoans(data)
+      }
+    } catch (error) {
+      console.error("Erro ao buscar empréstimos:", error)
+      toast({ title: "Erro de conexão", variant: "destructive" })
+    } finally {
+      setLoading(false)
+    }
+  }, [API_URL, USER_ID, toast])
+
   // --- Fetch Inicial ---
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true)
+    const fetchInitialData = async () => {
+      await fetchLoans()
+      
+      // Buscar livros disponíveis para empréstimo
       try {
-        const [loansRes, booksRes] = await Promise.all([
-          fetch(`${API_URL}/api/v1/users/${USER_ID}/loans`),
-          fetch(`${API_URL}/api/v1/users/${USER_ID}/library`)
-        ])
-
-        if (loansRes.ok) setLoans(await loansRes.json())
-        if (booksRes.ok) {
-           const libraryData = await booksRes.json()
-           // Precisamos mapear para extrair apenas infos do livro, pois o endpoint retorna UserBook
-           const books = libraryData.map((item: any) => ({
-             bookId: item.bookId,
-             title: item.title,
-             coverImageUrl: item.coverImageUrl,
-             author: item.author
-           }))
-           setUserBooks(books)
+        const libraryRes = await fetch(`${API_URL}/api/v1/users/${USER_ID}/library`)
+        if (libraryRes.ok) {
+           const libraryData = await libraryRes.json()
+           const myBooks = libraryData
+                .filter((item: any) => item.status !== 'WANT_TO_READ')
+                .map((item: any) => ({
+                    bookId: item.bookId,
+                    title: item.title,
+                    author: item.author
+                }))
+           setAvailableBooks(myBooks)
         }
       } catch (error) {
-        console.error("Erro:", error)
-        toast({ title: "Erro de conexão", variant: "destructive" })
-      } finally {
-        setLoading(false)
+        console.error("Erro ao buscar biblioteca:", error)
       }
     }
-    fetchData()
-  }, [API_URL, toast])
+    fetchInitialData()
+  }, [fetchLoans, API_URL, USER_ID])
 
   // --- Lógica de Negócio ---
 
-  // Verifica se está atrasado (Status Ativo E Data de vencimento no passado)
   const isOverdue = (loan: Loan) => {
-    return loan.status === 'ACTIVE' && isPast(parseISO(loan.dueDate)) && !isSameDay(parseISO(loan.dueDate), new Date())
+    if (!loan.dueDate) return false
+    return loan.status === 'ACTIVE' && 
+           isPast(parseISO(loan.dueDate)) && 
+           new Date().toISOString().split('T')[0] !== loan.dueDate
   }
 
-  const isSameDay = (d1: Date, d2: Date) => {
-    return d1.getFullYear() === d2.getFullYear() &&
-           d1.getMonth() === d2.getMonth() &&
-           d1.getDate() === d2.getDate();
-  }
-
-// Filtragem Segura
   const filteredLoans = loans.filter(loan => {
-    // Tratamento seguro para evitar erro se o dado vier nulo do banco
+    // Proteção contra valores nulos/undefined
     const borrower = loan.borrowerName?.toLowerCase() || "";
-    const bookTitle = loan.userBook?.book?.title?.toLowerCase() || "";
+    const bookTitle = loan.bookTitle?.toLowerCase() || ""; 
     const query = searchQuery.toLowerCase();
 
-    // Verifica se o termo de busca existe no nome da pessoa OU no título do livro
     const matchesSearch = borrower.includes(query) || bookTitle.includes(query);
-
     if (!matchesSearch) return false
 
     if (activeTab === 'active') return loan.status === 'ACTIVE' && !isOverdue(loan)
     if (activeTab === 'overdue') return isOverdue(loan)
     if (activeTab === 'returned') return loan.status === 'RETURNED'
     
-    return true // tab 'all'
+    return true 
   })
 
-  // Estatísticas
   const stats = {
     active: loans.filter(l => l.status === 'ACTIVE' && !isOverdue(l)).length,
     overdue: loans.filter(l => isOverdue(l)).length,
     total: loans.length
   }
 
-  // Handlers
+  // --- Handlers ---
+
   const handleNewLoan = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedBookId) {
@@ -172,14 +173,19 @@ export function LoanManagement() {
           borrowerName,
           borrowerEmail,
           dueDate: dueDate || undefined,
-          notes // Enviando notas
+          notes
         })
       })
 
       if (response.ok) {
         toast({ title: "Sucesso", description: "Empréstimo registrado!" })
         setShowNewLoanDialog(false)
-        window.location.reload()
+        setBorrowerName("")
+        setBorrowerEmail("")
+        setDueDate("")
+        setNotes("")
+        setSelectedBookId("")
+        fetchLoans() // Recarrega a lista sem reload da página
       } else {
         toast({ title: "Erro ao criar", variant: "destructive" })
       }
@@ -197,10 +203,11 @@ export function LoanManagement() {
        })
        if (response.ok) {
          toast({ title: "Livro Devolvido!", description: "O status foi atualizado." })
-         window.location.reload()
+         fetchLoans()
        }
     } catch (error) {
         console.error(error)
+        toast({ title: "Erro", variant: "destructive" })
     }
   }
 
@@ -214,65 +221,66 @@ export function LoanManagement() {
                 <h2 className="text-3xl font-bold tracking-tight">Gerenciar Empréstimos</h2>
                 <p className="text-muted-foreground">Controle todos os seus empréstimos de livros</p>
             </div>
-            <Dialog open={showNewLoanDialog} onOpenChange={setShowNewLoanDialog}>
-                <DialogTrigger asChild>
-                    <Button className="bg-primary hover:bg-primary/90 text-white">
-                        <Plus className="mr-2 h-4 w-4"/> Novo Empréstimo
-                    </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[500px]">
-                    <DialogHeader>
-                        <DialogTitle>Registrar Novo Empréstimo</DialogTitle>
-                        <DialogDescription>Registre um novo empréstimo de livro</DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handleNewLoan} className="space-y-4 mt-4">
-                        <div className="space-y-2">
-                            <Label>Livro</Label>
-                            <Select onValueChange={setSelectedBookId} value={selectedBookId}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Selecione um livro" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {userBooks.map((book) => (
-                                        <SelectItem key={book.bookId} value={book.bookId.toString()}>
-                                            {book.title}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Nome do Empréstário</Label>
-                            <Input placeholder="Digite o nome completo" value={borrowerName} onChange={e => setBorrowerName(e.target.value)} required />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Email</Label>
-                            <Input type="email" placeholder="email@exemplo.com" value={borrowerEmail} onChange={e => setBorrowerEmail(e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Telefone (opcional)</Label>
-                            <Input placeholder="(11) 99999-9999" value={borrowerPhone} onChange={e => setBorrowerPhone(e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Data de Devolução</Label>
-                            <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Observações (opcional)</Label>
-                            <Input placeholder="Adicione observações..." value={notes} onChange={e => setNotes(e.target.value)} />
-                        </div>
-                        <div className="flex justify-end gap-2 pt-4">
-                            <Button variant="outline" type="button" onClick={() => setShowNewLoanDialog(false)}>Cancelar</Button>
-                            <Button type="submit" className="bg-primary text-white" disabled={submitting}>
-                                {submitting ? "Registrando..." : "Registrar Empréstimo"}
-                            </Button>
-                        </div>
-                    </form>
-                </DialogContent>
-            </Dialog>
+            <div className="flex gap-2">
+                <Button variant="outline" size="icon" onClick={() => fetchLoans()} title="Atualizar lista">
+                    <RefreshCcw className="h-4 w-4" />
+                </Button>
+                <Dialog open={showNewLoanDialog} onOpenChange={setShowNewLoanDialog}>
+                    <DialogTrigger asChild>
+                        <Button className="bg-primary hover:bg-primary/90 text-white">
+                            <Plus className="mr-2 h-4 w-4"/> Novo Empréstimo
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[500px]">
+                        <DialogHeader>
+                            <DialogTitle>Registrar Novo Empréstimo</DialogTitle>
+                            <DialogDescription>Preencha os dados abaixo</DialogDescription>
+                        </DialogHeader>
+                        <form onSubmit={handleNewLoan} className="space-y-4 mt-4">
+                            <div className="space-y-2">
+                                <Label>Qual livro será emprestado?</Label>
+                                <Select onValueChange={setSelectedBookId} value={selectedBookId}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecione um livro..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableBooks.map((book) => (
+                                            <SelectItem key={book.bookId} value={book.bookId.toString()}>
+                                                {book.title}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Quem vai pegar?</Label>
+                                <Input placeholder="Nome completo" value={borrowerName} onChange={e => setBorrowerName(e.target.value)} required />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Email de contato</Label>
+                                <Input type="email" placeholder="email@exemplo.com" value={borrowerEmail} onChange={e => setBorrowerEmail(e.target.value)} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Data Limite de Devolução</Label>
+                                <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Observações</Label>
+                                <Input placeholder="Ex: Cuidar da capa..." value={notes} onChange={e => setNotes(e.target.value)} />
+                            </div>
+                            <div className="flex justify-end gap-2 pt-4">
+                                <Button variant="outline" type="button" onClick={() => setShowNewLoanDialog(false)}>Cancelar</Button>
+                                <Button type="submit" disabled={submitting}>
+                                    {submitting ? <Loader2 className="h-4 w-4 animate-spin"/> : "Confirmar"}
+                                </Button>
+                            </div>
+                        </form>
+                    </DialogContent>
+                </Dialog>
+            </div>
         </div>
 
-        {/* Cards de Resumo (Stats) */}
+        {/* Cards de Resumo */}
         <div className="grid gap-4 md:grid-cols-3">
             <Card className="bg-card border-muted">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -281,7 +289,6 @@ export function LoanManagement() {
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{stats.active}</div>
-                    <p className="text-xs text-muted-foreground">{stats.overdue} atrasado(s)</p>
                 </CardContent>
             </Card>
             <Card className="bg-card border-muted">
@@ -291,28 +298,26 @@ export function LoanManagement() {
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold text-red-500">{stats.overdue}</div>
-                    <p className="text-xs text-muted-foreground">Requer atenção</p>
                 </CardContent>
             </Card>
             <Card className="bg-card border-muted">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Total de Empréstimos</CardTitle>
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Total Histórico</CardTitle>
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{stats.total}</div>
-                    <p className="text-xs text-muted-foreground">Histórico completo</p>
                 </CardContent>
             </Card>
         </div>
 
-        {/* Barra de Ferramentas e Abas */}
+        {/* Filtros e Lista */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="relative w-full md:w-96">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input 
                     placeholder="Buscar por livro ou pessoa..." 
-                    className="pl-10 bg-card border-input"
+                    className="pl-10"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -320,15 +325,14 @@ export function LoanManagement() {
             
             <Tabs defaultValue="active" className="w-full md:w-auto" onValueChange={setActiveTab}>
                 <TabsList className="grid w-full grid-cols-4 md:w-auto">
-                    <TabsTrigger value="active">Ativos ({stats.active})</TabsTrigger>
-                    <TabsTrigger value="overdue">Atrasados ({stats.overdue})</TabsTrigger>
+                    <TabsTrigger value="active">Ativos</TabsTrigger>
+                    <TabsTrigger value="overdue">Atrasados</TabsTrigger>
                     <TabsTrigger value="returned">Devolvidos</TabsTrigger>
                     <TabsTrigger value="all">Todos</TabsTrigger>
                 </TabsList>
             </Tabs>
         </div>
 
-        {/* Lista de Cards de Empréstimo */}
         <div className="grid gap-4">
             {filteredLoans.length === 0 ? (
                 <div className="text-center py-16 border-2 border-dashed rounded-lg bg-muted/10">
@@ -339,57 +343,70 @@ export function LoanManagement() {
                     const overdue = isOverdue(loan)
                     
                     return (
-                    <Card key={loan.id} className={`overflow-hidden transition-all hover:shadow-md ${overdue ? 'border-red-500/30 bg-red-500/5' : 'border-muted bg-card'}`}>
+                    <Card key={loan.id} className={`overflow-hidden transition-all hover:border-primary/50 ${overdue ? 'border-red-500/30 bg-red-500/5' : ''}`}>
                         <CardContent className="p-0">
-                            <div className="flex flex-col md:flex-row">
-                                {/* Capa do Livro */}
-                                <div className="relative w-full md:w-32 h-48 md:h-auto flex-shrink-0">
-                                    <Image 
-                                        src={loan.userBook?.book?.coverImageUrl || "/placeholder.svg"} 
-                                        alt={loan.userBook?.book?.title}
-                                        fill
-                                        className="object-cover"
-                                    />
+                            <div className="flex flex-col sm:flex-row">
+                                {/* --- CAPA DO LIVRO --- */}
+                                <div className="relative w-full sm:w-32 h-48 sm:h-auto flex-shrink-0 bg-transparent flex items-center justify-center sm:ml-2 sm:my-2">
+                                    <div className="relative w-24 h-36 shadow-sm">
+                                        <Image 
+                                            src={loan.bookCoverUrl || "/placeholder.svg"} 
+                                            alt={loan.bookTitle}
+                                            fill
+                                            className="object-contain rounded-sm"
+                                        />
+                                    </div>
                                 </div>
 
-                                {/* Detalhes */}
+                                {/* --- DETALHES --- */}
                                 <div className="flex-1 p-6 flex flex-col justify-between">
-                                    <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-4">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
                                         <div>
-                                            <h3 className="text-xl font-bold text-foreground mb-1">{loan.userBook?.book?.title}</h3>
-                                            <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                                                <User className="h-4 w-4" />
-                                                <span>{loan.borrowerName}</span>
+                                            <h3 className="text-xl font-bold text-foreground mb-1">{loan.bookTitle}</h3>
+                                            
+                                            {/* Renderiza autor apenas se existir */}
+                                            {loan.bookAuthor && (
+                                              <p className="text-sm text-muted-foreground mb-2">{loan.bookAuthor}</p>
+                                            )}
+                                            
+                                            <div className="flex items-center gap-2 mt-3">
+                                                <User className="h-4 w-4 text-muted-foreground" />
+                                                <span className="font-medium">{loan.borrowerName}</span>
                                             </div>
-                                            <div className="text-sm text-muted-foreground space-y-1">
-                                                <p>Emprestado em: {format(parseISO(loan.loanDate), "dd/MM/yyyy")}</p>
-                                                <p className={`${overdue ? 'text-red-500 font-semibold' : ''}`}>
+                                            
+                                            {loan.borrowerEmail && (
+                                                <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                                                    <Mail className="h-3 w-3" />
+                                                    <span>{loan.borrowerEmail}</span>
+                                                </div>
+                                            )}
+
+                                            <div className="mt-4 space-y-1 text-sm">
+                                                <div className="flex items-center gap-2 text-muted-foreground">
+                                                    <CalendarIcon className="h-3 w-3" />
+                                                    Emprestado em: {format(parseISO(loan.loanDate), "dd/MM/yyyy")}
+                                                </div>
+                                                <div className={`flex items-center gap-2 ${overdue ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>
+                                                    <Clock className="h-3 w-3" />
                                                     Vence em: {format(parseISO(loan.dueDate), "dd/MM/yyyy")}
-                                                </p>
-                                                {loan.borrowerEmail && <p className="text-primary/80">{loan.borrowerEmail}</p>}
+                                                </div>
                                             </div>
                                         </div>
 
                                         {/* Status Badge */}
                                         <div className="flex flex-col items-end gap-2">
                                             {loan.status === 'RETURNED' ? (
-                                                <Badge className="bg-green-500/15 text-green-600 hover:bg-green-500/25 border-green-500/20 gap-1">
-                                                    <CheckCircle2 className="h-3 w-3" /> Devolvido
+                                                <Badge className="bg-green-500/15 text-green-600 border-green-500/20 hover:bg-green-500/25">
+                                                    Devolvido
                                                 </Badge>
                                             ) : overdue ? (
-                                                <Badge variant="destructive" className="gap-1">
-                                                    <AlertTriangle className="h-3 w-3" /> Atrasado
+                                                <Badge variant="destructive">
+                                                    Atrasado ({differenceInDays(new Date(), parseISO(loan.dueDate))} dias)
                                                 </Badge>
                                             ) : (
-                                                <Badge className="bg-blue-500/15 text-blue-600 hover:bg-blue-500/25 border-blue-500/20 gap-1">
-                                                    <Clock className="h-3 w-3" /> Ativo
+                                                <Badge variant="secondary" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
+                                                    Ativo
                                                 </Badge>
-                                            )}
-                                            
-                                            {overdue && (
-                                                <span className="text-xs text-red-500 font-medium">
-                                                    {differenceInDays(new Date(), parseISO(loan.dueDate))} dias de atraso
-                                                </span>
                                             )}
                                         </div>
                                     </div>
@@ -397,13 +414,13 @@ export function LoanManagement() {
                                     {/* Ações */}
                                     <div className="flex justify-end gap-3 border-t pt-4 mt-2">
                                         <Button variant="outline" size="sm" className="gap-2">
-                                            <MessageSquare className="h-4 w-4" /> Lembrar
+                                            <MessageSquare className="h-4 w-4" /> Cobrar
                                         </Button>
                                         
                                         {loan.status === 'ACTIVE' && (
                                             <Button 
                                                 size="sm" 
-                                                className="bg-primary hover:bg-primary/90 text-white gap-2"
+                                                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
                                                 onClick={() => handleReturnBook(loan.id)}
                                             >
                                                 <CheckCircle2 className="h-4 w-4" /> 

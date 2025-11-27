@@ -8,14 +8,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter
+  DialogFooter,
+  DialogDescription
 } from "@/components/ui/dialog"
 import {
   BookOpen,
@@ -23,17 +23,28 @@ import {
   Calendar,
   MapPin,
   Edit,
-  Clock,
-  CheckCircle,
-  Shield,
   User,
-  Building2,
-  AlertCircle,
   Pencil,
-  Loader2
+  Loader2,
+  History,
+  PlusCircle,
+  ArrowRightLeft,
+  CheckCircle2,
+  Heart,
+  Camera
 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useToast } from "@/hooks/use-toast"
+import { format, parseISO } from "date-fns"
+import { ptBR } from "date-fns/locale"
+
+// --- LISTA DE AVATARES (EMOJIS) ---
+const AVATAR_OPTIONS = [
+  "🦊", "🐱", "🐶", "🦁", "🐯", "🐨", "🐼", "🐸",
+  "🐙", "🦄", "🐲", "👽", "🤖", "👻", "💀", "🤠",
+  "👩‍🚀", "👨‍🚒", "🕵️‍♀️", "🧙‍♂️", "🧛‍♀️", "🧚‍♀️", "🧜‍♂️", "🧞‍♂️",
+  "📚", "👓", "🎓", "💡", "🚀", "⭐", "🌙", "⚡"
+]
 
 // --- INTERFACES ---
 interface UserStats {
@@ -41,20 +52,14 @@ interface UserStats {
   booksRead: number
   currentlyReading: number
   wishlist: number
-  reviews: number
-  averageRating: number
   readingGoal: number
   booksThisYear: number
 }
 
-interface ReadingActivity {
-  id: string
-  type: "finished" | "started" | "reviewed" | "added"
-  bookTitle: string
-  bookCover: string
-  dateFormatted: string
-  rating?: number
-  review?: string
+interface HistoryItem {
+  actionType: string
+  description: string
+  createdAt: string
 }
 
 interface SecurityInfo {
@@ -73,25 +78,22 @@ interface UserProfileData {
   firstName: string
   lastName: string
   email: string
-  phone: string
   bio: string
-  accountType: "individual" | "library"
   joinDate: string
+  avatar: string // Adicionado campo avatar
 }
 
 export function UserProfile() {
   // --- ESTADOS ---
   const [profile, setProfile] = useState<UserProfileData | null>(null)
   const [securityInfo, setSecurityInfo] = useState<SecurityInfo | null>(null)
-  const [activity, setActivity] = useState<ReadingActivity[]>([])
+  const [activity, setActivity] = useState<HistoryItem[]>([])
   
   const [stats, setStats] = useState<UserStats>({
     totalBooks: 0,
     booksRead: 0,
     currentlyReading: 0,
     wishlist: 0,
-    reviews: 0,
-    averageRating: 0,
     readingGoal: 0,
     booksThisYear: 0
   })
@@ -104,9 +106,9 @@ export function UserProfile() {
   const [isEditingSecurity, setIsEditingSecurity] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   
-  // Modal de Meta
+  // Modais
   const [isGoalDialogOpen, setIsGoalDialogOpen] = useState(false)
-  const [newGoalValue, setNewGoalValue] = useState("")
+  const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false) // Modal de Avatar
 
   const { toast } = useToast()
   const API_URL = process.env.NEXT_PUBLIC_API_URL
@@ -119,30 +121,31 @@ export function UserProfile() {
         setLoading(true)
         setError(null)
 
-        const [userRes, libraryRes] = await Promise.all([
+        const [userRes, libraryRes, historyRes] = await Promise.all([
           fetch(`${API_URL}/api/v1/users/${USER_ID}`),
-          fetch(`${API_URL}/api/v1/users/${USER_ID}/library`)
+          fetch(`${API_URL}/api/v1/users/${USER_ID}/library`),
+          fetch(`${API_URL}/api/v1/users/${USER_ID}/history`)
         ])
 
         if (!userRes.ok) throw new Error("Falha ao carregar usuário")
         
         const userData = await userRes.json()
         const libraryData = libraryRes.ok ? await libraryRes.json() : []
+        
+        if (historyRes.ok) {
+            setActivity(await historyRes.json())
+        }
 
-        // Processar Estatísticas
         const statsCalc = {
             totalBooks: libraryData.length,
             booksRead: libraryData.filter((b: any) => b.status === 'READ').length,
             currentlyReading: libraryData.filter((b: any) => b.status === 'READING').length,
             wishlist: libraryData.filter((b: any) => b.status === 'WANT_TO_READ').length,
-            reviews: 0, 
-            averageRating: 0,
             readingGoal: userData.annualReadingGoal || 12,
             booksThisYear: libraryData.filter((b: any) => b.status === 'READ').length
         }
-        setStats(prev => ({...prev, ...statsCalc}))
+        setStats(statsCalc)
 
-        // Formatar Data
         let joinDateFormatted = "Data desconhecida"
         if (userData.createdAt) {
              const d = new Date(userData.createdAt)
@@ -152,18 +155,15 @@ export function UserProfile() {
              }
         }
 
-        // Setar Perfil
         setProfile({
           firstName: userData.firstName || "",
           lastName: userData.lastName || "",
           email: userData.email,
-          phone: "(11) 99999-9999", 
           bio: userData.biography || "Leitor(a) apaixonado(a).",
-          accountType: "individual",
           joinDate: joinDateFormatted,
+          avatar: userData.avatar || "🦊" // Valor padrão se não tiver no banco
         })
 
-        // Setar Segurança (Dados Pessoais)
         setSecurityInfo({
           cpf: userData.cpf || "",
           birthDate: userData.dateOfBirth || "",
@@ -193,7 +193,6 @@ export function UserProfile() {
     if (!profile || !securityInfo) return
     setIsSaving(true)
 
-    // Monta o objeto completo que a API espera (UserRequestDTO)
     const payload = {
         firstName: profile.firstName,
         lastName: profile.lastName,
@@ -206,7 +205,7 @@ export function UserProfile() {
         addressState: securityInfo.address.state,
         addressZip: securityInfo.address.zipCode,
         annualReadingGoal: stats.readingGoal,
-        // Não enviamos password, pois o backend agora trata null como "manter atual"
+        avatar: profile.avatar // Enviando o avatar (precisa adicionar no Backend DTO futuramente)
     }
 
     try {
@@ -220,6 +219,8 @@ export function UserProfile() {
             toast({ title: "Sucesso", description: "Dados atualizados com sucesso!" })
             setIsEditing(false)
             setIsEditingSecurity(false)
+            setIsGoalDialogOpen(false)
+            setIsAvatarDialogOpen(false)
         } else {
             const err = await response.json()
             toast({ title: "Erro", description: err.message || "Falha ao salvar.", variant: "destructive" })
@@ -231,7 +232,27 @@ export function UserProfile() {
     }
   }
 
-  // Renderização segura
+  const handleAvatarSelect = (emoji: string) => {
+      if(profile) {
+          setProfile({ ...profile, avatar: emoji })
+          // Opcional: Salvar imediatamente ou esperar o botão salvar? 
+          // Vamos deixar para salvar junto com o perfil por enquanto para simplicidade, 
+          // mas fechar o modal visualmente.
+          setIsAvatarDialogOpen(false) 
+      }
+  }
+
+  const getActivityIcon = (type: string) => {
+    switch (type) {
+      case "LISTA DE DESEJOS": return <Heart className="h-4 w-4 text-rose-500" />
+      case "BIBLIOTECA": return <PlusCircle className="h-4 w-4 text-emerald-500" />
+      case "EMPRÉSTIMO": return <ArrowRightLeft className="h-4 w-4 text-orange-500" />
+      case "DEVOLUÇÃO": return <CheckCircle2 className="h-4 w-4 text-blue-500" />
+      case "LEITURA": return <BookOpen className="h-4 w-4 text-primary" />
+      default: return <History className="h-4 w-4 text-muted-foreground" />
+    }
+  }
+
   if (loading) return <div className="flex justify-center p-20"><Loader2 className="animate-spin h-10 w-10 text-primary" /></div>
   if (error || !profile || !securityInfo) return <Alert variant="destructive"><AlertTitle>Erro</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>
 
@@ -243,14 +264,49 @@ export function UserProfile() {
       <Card>
         <CardContent className="p-6">
           <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-            <div className="flex items-center gap-4">
-              <Avatar className="h-20 w-20 border-2 border-border">
-                <AvatarImage src="/diverse-user-avatars.png" />
-                <AvatarFallback className="text-lg font-bold bg-muted">
-                    {(profile.firstName || "U").charAt(0)}
-                </AvatarFallback>
-              </Avatar>
-              <div className="space-y-1">
+            
+            {/* --- ÁREA DO AVATAR --- */}
+            <div className="relative group">
+                <Avatar className="h-24 w-24 border-4 border-muted bg-secondary cursor-pointer hover:opacity-90 transition-opacity">
+                    {/* Se tiver avatar (emoji), mostra ele grande. Se não, mostra iniciais */}
+                    <AvatarFallback className="text-4xl bg-transparent">
+                        {profile.avatar || (profile.firstName || "U").charAt(0)}
+                    </AvatarFallback>
+                </Avatar>
+                
+                {/* Botão de Editar Avatar (Aparece no Hover ou se estiver editando) */}
+                <Dialog open={isAvatarDialogOpen} onOpenChange={setIsAvatarDialogOpen}>
+                    <DialogTrigger asChild>
+                        <Button 
+                            size="icon" 
+                            variant="secondary" 
+                            className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full shadow-md border border-white dark:border-slate-900 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                        >
+                            <Camera className="h-4 w-4" />
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Escolha seu Avatar</DialogTitle>
+                            <DialogDescription>Selecione um emoji para representar você.</DialogDescription>
+                        </DialogHeader>
+                        <div className="grid grid-cols-8 gap-2 py-4">
+                            {AVATAR_OPTIONS.map((emoji) => (
+                                <button
+                                    key={emoji}
+                                    onClick={() => handleAvatarSelect(emoji)}
+                                    className={`text-2xl p-2 rounded-md hover:bg-muted transition-colors ${profile.avatar === emoji ? 'bg-primary/20 ring-2 ring-primary' : ''}`}
+                                >
+                                    {emoji}
+                                </button>
+                            ))}
+                        </div>
+                        {/* Se quiser salvar só o avatar, pode ter um botão aqui, mas handleAvatarSelect já atualiza o estado local */}
+                    </DialogContent>
+                </Dialog>
+            </div>
+
+            <div className="space-y-1 flex-1">
                 <div className="flex items-center gap-2">
                   <h1 className="text-2xl font-bold">
                     {profile.firstName} {profile.lastName}
@@ -258,19 +314,25 @@ export function UserProfile() {
                   <User className="h-5 w-5 text-primary" />
                 </div>
                 <p className="text-muted-foreground">{profile.bio}</p>
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2">
                   <div className="flex items-center gap-1">
                     <MapPin className="h-4 w-4" />
-                    {securityInfo.address.city}, {securityInfo.address.state}
+                    {securityInfo.address.city || "Cidade"}, {securityInfo.address.state || "UF"}
                   </div>
                   <div className="flex items-center gap-1">
                     <Calendar className="h-4 w-4" />
                     Membro desde {profile.joinDate}
                   </div>
                 </div>
-              </div>
             </div>
-            <div className="flex-1" />
+
+            <div className="flex-1 md:flex-none" />
+            
+            {/* Botão de Salvar Avatar se ele foi alterado mas não salvo ainda no modo de visualização */}
+            {profile.avatar !== (profile as any)._originalAvatar && !isEditing && (
+                 <Button onClick={handleSaveAll} size="sm" className="hidden">Salvar Avatar</Button>
+            )}
+
             <Button size="sm" variant="outline" onClick={() => setIsEditing(!isEditing)}>
               <Edit className="h-4 w-4 mr-2" />
               {isEditing ? "Cancelar" : "Editar Perfil"}
@@ -278,7 +340,7 @@ export function UserProfile() {
           </div>
 
           {isEditing && (
-             <div className="mt-4 p-4 border rounded-lg bg-muted/10 space-y-4 animate-in slide-in-from-top-2">
+             <div className="mt-6 p-4 border rounded-lg bg-muted/10 space-y-4 animate-in slide-in-from-top-2">
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                         <Label>Nome</Label>
@@ -344,8 +406,35 @@ export function UserProfile() {
           <TabsTrigger value="security">Segurança</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="activity" className="mt-6 text-center text-muted-foreground py-10">
-            Sua atividade recente aparecerá aqui.
+        <TabsContent value="activity" className="mt-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Histórico Recente</CardTitle>
+                    <CardDescription>Suas últimas interações na plataforma</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {activity.length === 0 ? (
+                        <p className="text-center text-muted-foreground py-8">Nenhuma atividade registrada ainda.</p>
+                    ) : (
+                        <div className="space-y-4">
+                            {activity.map((item, index) => (
+                                <div key={index} className="flex items-start gap-4 border-b last:border-0 pb-4 last:pb-0">
+                                    <div className="mt-1 bg-muted/50 p-2 rounded-full border">
+                                        {getActivityIcon(item.actionType)}
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="font-medium text-sm">{item.description}</p>
+                                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                            <Calendar className="h-3 w-3" />
+                                            {format(parseISO(item.createdAt), "dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
         </TabsContent>
 
         <TabsContent value="security" className="mt-6 space-y-4">

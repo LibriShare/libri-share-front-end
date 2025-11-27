@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { BookOpen, Users, Clock, TrendingUp, Loader2 } from "lucide-react"
+import { BookOpen, Users, Clock, TrendingUp, Loader2, Heart } from "lucide-react" // Importei Heart
 
 export function StatsCards() {
   const [stats, setStats] = useState({
     totalBooks: 0,
     booksRead: 0,
     booksReading: 0,
-    booksToRead: 0
+    booksToRead: 0 // Isso vem do backend correspondendo a WANT_TO_READ
   })
   const [loading, setLoading] = useState(true)
 
@@ -17,7 +17,6 @@ export function StatsCards() {
     const fetchStats = async () => {
       try {
         const API_URL = process.env.NEXT_PUBLIC_API_URL
-        // USANDO O ENDPOINT OTIMIZADO AGORA
         const response = await fetch(`${API_URL}/api/v1/users/1/library/stats`)
         
         if (response.ok) {
@@ -61,10 +60,11 @@ export function StatsCards() {
       color: "text-accent-foreground",
     },
     {
-      title: "Para Ler",
+      // --- ALTERAÇÃO AQUI: Mudado de "Para Ler" para "Lista de Desejos" ---
+      title: "Lista de Desejos",
       value: stats.booksToRead,
-      description: "Lista de desejos",
-      icon: Users,
+      description: "Livros que quero", // Descrição mais adequada
+      icon: Heart, // Ícone de coração faz mais sentido para desejos
       color: "text-chart-4",
     },
   ]

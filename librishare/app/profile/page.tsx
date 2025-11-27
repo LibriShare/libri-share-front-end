@@ -4,15 +4,18 @@ import { UserProfile } from "@/components/profile/user-profile"
 
 export default function ProfilePage() {
   return (
-    <div className="min-h-screen bg-background">
-      <DashboardHeader />
+    <div className="flex h-screen bg-background w-full">
+      
+      {/* Sidebar fixa à esquerda */}
+      <div className="hidden lg:block">
+        <Sidebar />
+      </div>
 
-      <div className="flex">
-        <aside className="hidden lg:block border-r bg-card/50">
-          <Sidebar />
-        </aside>
+      {/* Área de Conteúdo */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <DashboardHeader />
 
-        <main className="flex-1 px-4 py-8">
+        <main className="flex-1 overflow-y-auto p-6">
           <div className="max-w-6xl mx-auto">
             <UserProfile />
           </div>

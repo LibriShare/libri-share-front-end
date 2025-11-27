@@ -21,36 +21,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="space-y-6">
-              {/* Notification Settings */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Bell className="h-5 w-5" />
-                    Notificações
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label>Notificações por Email</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Receba atualizações sobre empréstimos e prazos
-                      </p>
-                    </div>
-                    <Switch defaultChecked />
-                  </div>
-
-                  <Separator />
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label>Lembretes de Devolução</Label>
-                      <p className="text-sm text-muted-foreground">Notificações sobre prazos de empréstimos</p>
-                    </div>
-                    <Switch defaultChecked />
-                  </div>
-                </CardContent>
-              </Card>
+            
 
               {/* Danger Zone */}
               <Card className="border-red-900/50 bg-red-950/10">
