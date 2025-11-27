@@ -21,7 +21,7 @@ import {
   BookOpen,
   Star,
   Calendar,
-  MapPin,
+  // MapPin, // <-- REMOVIDO: Não precisamos mais importar o MapPin
   Edit,
   User,
   Pencil,
@@ -38,7 +38,7 @@ import { useToast } from "@/hooks/use-toast"
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
-// --- LISTA DE AVATARES (EMOJIS) ---
+// ... (MANTENHA AS CONSTANTES E INTERFACES IGUAIS AQUI) ...
 const AVATAR_OPTIONS = [
   "🦊", "🐱", "🐶", "🦁", "🐯", "🐨", "🐼", "🐸",
   "🐙", "🦄", "🐲", "👽", "🤖", "👻", "💀", "🤠",
@@ -46,7 +46,6 @@ const AVATAR_OPTIONS = [
   "📚", "👓", "🎓", "💡", "🚀", "⭐", "🌙", "⚡"
 ]
 
-// --- INTERFACES ---
 interface UserStats {
   totalBooks: number
   booksRead: number
@@ -80,11 +79,11 @@ interface UserProfileData {
   email: string
   bio: string
   joinDate: string
-  avatar: string // Adicionado campo avatar
+  avatar: string
 }
 
 export function UserProfile() {
-  // --- ESTADOS ---
+  // ... (MANTENHA TODOS OS ESTADOS E O USEEFFECT IGUAIS AQUI) ...
   const [profile, setProfile] = useState<UserProfileData | null>(null)
   const [securityInfo, setSecurityInfo] = useState<SecurityInfo | null>(null)
   const [activity, setActivity] = useState<HistoryItem[]>([])
@@ -101,20 +100,17 @@ export function UserProfile() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
-  // Modos de Edição
   const [isEditing, setIsEditing] = useState(false)
   const [isEditingSecurity, setIsEditingSecurity] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   
-  // Modais
   const [isGoalDialogOpen, setIsGoalDialogOpen] = useState(false)
-  const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false) // Modal de Avatar
+  const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false)
 
   const { toast } = useToast()
   const API_URL = process.env.NEXT_PUBLIC_API_URL
   const USER_ID = 1
 
-  // --- FETCH DADOS ---
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -161,7 +157,7 @@ export function UserProfile() {
           email: userData.email,
           bio: userData.biography || "Leitor(a) apaixonado(a).",
           joinDate: joinDateFormatted,
-          avatar: userData.avatar || "🦊" // Valor padrão se não tiver no banco
+          avatar: userData.avatar || "🦊"
         })
 
         setSecurityInfo({
@@ -187,8 +183,6 @@ export function UserProfile() {
     fetchData()
   }, [API_URL])
 
-
-  // --- SALVAR DADOS (PUT) ---
   const handleSaveAll = async () => {
     if (!profile || !securityInfo) return
     setIsSaving(true)
@@ -205,7 +199,7 @@ export function UserProfile() {
         addressState: securityInfo.address.state,
         addressZip: securityInfo.address.zipCode,
         annualReadingGoal: stats.readingGoal,
-        avatar: profile.avatar // Enviando o avatar (precisa adicionar no Backend DTO futuramente)
+        avatar: profile.avatar 
     }
 
     try {
@@ -235,9 +229,6 @@ export function UserProfile() {
   const handleAvatarSelect = (emoji: string) => {
       if(profile) {
           setProfile({ ...profile, avatar: emoji })
-          // Opcional: Salvar imediatamente ou esperar o botão salvar? 
-          // Vamos deixar para salvar junto com o perfil por enquanto para simplicidade, 
-          // mas fechar o modal visualmente.
           setIsAvatarDialogOpen(false) 
       }
   }
@@ -268,23 +259,24 @@ export function UserProfile() {
             {/* --- ÁREA DO AVATAR --- */}
             <div className="relative group">
                 <Avatar className="h-24 w-24 border-4 border-muted bg-secondary cursor-pointer hover:opacity-90 transition-opacity">
-                    {/* Se tiver avatar (emoji), mostra ele grande. Se não, mostra iniciais */}
                     <AvatarFallback className="text-4xl bg-transparent">
                         {profile.avatar || (profile.firstName || "U").charAt(0)}
                     </AvatarFallback>
                 </Avatar>
                 
-                {/* Botão de Editar Avatar (Aparece no Hover ou se estiver editando) */}
+                {/* --- MUDANÇA 1: Dialog só abre se isEditing for true --- */}
                 <Dialog open={isAvatarDialogOpen} onOpenChange={setIsAvatarDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button 
-                            size="icon" 
-                            variant="secondary" 
-                            className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full shadow-md border border-white dark:border-slate-900 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
-                        >
-                            <Camera className="h-4 w-4" />
-                        </Button>
-                    </DialogTrigger>
+                    {isEditing && (
+                      <DialogTrigger asChild>
+                          <Button 
+                              size="icon" 
+                              variant="secondary" 
+                              className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full shadow-md border border-white dark:border-slate-900 opacity-100 transition-opacity"
+                          >
+                              <Camera className="h-4 w-4" />
+                          </Button>
+                      </DialogTrigger>
+                    )}
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader>
                             <DialogTitle>Escolha seu Avatar</DialogTitle>
@@ -301,7 +293,6 @@ export function UserProfile() {
                                 </button>
                             ))}
                         </div>
-                        {/* Se quiser salvar só o avatar, pode ter um botão aqui, mas handleAvatarSelect já atualiza o estado local */}
                     </DialogContent>
                 </Dialog>
             </div>
@@ -315,10 +306,7 @@ export function UserProfile() {
                 </div>
                 <p className="text-muted-foreground">{profile.bio}</p>
                 <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2">
-                  <div className="flex items-center gap-1">
-                    <MapPin className="h-4 w-4" />
-                    {securityInfo.address.city || "Cidade"}, {securityInfo.address.state || "UF"}
-                  </div>
+                  {/* --- MUDANÇA 2: REMOVIDO DIV DE CIDADE, UF --- */}
                   <div className="flex items-center gap-1">
                     <Calendar className="h-4 w-4" />
                     Membro desde {profile.joinDate}
@@ -328,17 +316,13 @@ export function UserProfile() {
 
             <div className="flex-1 md:flex-none" />
             
-            {/* Botão de Salvar Avatar se ele foi alterado mas não salvo ainda no modo de visualização */}
-            {profile.avatar !== (profile as any)._originalAvatar && !isEditing && (
-                 <Button onClick={handleSaveAll} size="sm" className="hidden">Salvar Avatar</Button>
-            )}
-
             <Button size="sm" variant="outline" onClick={() => setIsEditing(!isEditing)}>
               <Edit className="h-4 w-4 mr-2" />
               {isEditing ? "Cancelar" : "Editar Perfil"}
             </Button>
           </div>
 
+          {/* ... (RESTANTE DO CÓDIGO PERMANECE IGUAL) ... */}
           {isEditing && (
              <div className="mt-6 p-4 border rounded-lg bg-muted/10 space-y-4 animate-in slide-in-from-top-2">
                 <div className="grid grid-cols-2 gap-4">

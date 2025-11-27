@@ -2,46 +2,44 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation" // Importamos o "roteador"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert" // Importamos o Alerta
-import { Eye, EyeOff, Shield, AlertCircle } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react"
 import Image from "next/image"
 
 export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
-  // --- Estados para os campos do formulário ---
+  // --- Estados Alinhados com UserRequestDTO do Backend ---
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
   const [email, setEmail] = useState("")
-  const [cpf, setCpf] = useState("")
-  const [birthDate, setBirthDate] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
 
-  // --- Estados de Endereço ---
-  const [street, setStreet] = useState("")
-  const [number, setNumber] = useState("")
-  const [neighborhood, setNeighborhood] = useState("")
-  const [complement, setComplement] = useState("")
-  const [city, setCity] = useState("")
-  const [state, setState] = useState("")
-  const [zipCode, setZipCode] = useState("")
-
-  // --- Estados de Controle da API ---
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const router = useRouter() // Hook para redirecionar o usuário
+  const router = useRouter()
 
-  // Função que será chamada ao enviar o formulário
+  const API_URL = process.env.NEXT_PUBLIC_API_URL
+
+  // --- Fluxo de Login com Google ---
+  const handleGoogleLogin = () => {
+    setLoading(true)
+    // Redireciona para o endpoint do Spring Boot que inicia o fluxo OAuth2
+    // O backend cuidará da autenticação e redirecionará de volta para o /dashboard
+    window.location.href = `${API_URL}/oauth2/authorization/google`
+  }
+
+  // --- Fluxo de Cadastro Manual ---
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault() // Impede o recarregamento da página
+    e.preventDefault()
     setLoading(true)
     setError(null)
 
@@ -51,27 +49,16 @@ export default function SignUpPage() {
       return
     }
 
-    // Pegamos a URL da API da variável de ambiente que definimos no docker-compose
-    const API_URL = process.env.NEXT_PUBLIC_API_URL
-
-    // 1. Montamos o objeto (DTO) que o back-end espera
-    //   
+    // Payload exato conforme UserRequestDTO.java
     const userRequestDTO = {
       firstName,
       lastName,
       email,
       password,
-      cpf,
-      dateOfBirth: birthDate || null, // Envia nulo se estiver vazio
-      addressStreet: street,
-      addressCity: city,
-      addressState: state,
-      addressZip: zipCode,
-      // Você pode adicionar os campos que faltam (neighborhood, complement) no seu DTO se quiser
+      // annualReadingGoal: 12 // O backend já define 12 como padrão se for nulo
     }
 
     try {
-      // 2. Fazemos a chamada "fetch" para a API
       const response = await fetch(`${API_URL}/api/v1/users`, {
         method: "POST",
         headers: {
@@ -80,323 +67,151 @@ export default function SignUpPage() {
         body: JSON.stringify(userRequestDTO),
       })
 
-      // 3. Lidamos com a resposta
       if (response.ok) {
-        // Sucesso!
-        alert("Conta criada com sucesso! Você será redirecionado para o login.")
-        router.push("/") // Redireciona para a página de login
+        // Sucesso
+        // Em um app real, você faria o login automático aqui ou pediria para logar
+        alert("Conta criada com sucesso! Faça login para continuar.")
+        router.push("/") 
       } else {
-        // Erro!
+        // Tratamento de Erros
         const errorData = await response.json()
         
-        // Pega o erro de validação (ex: email inválido) ou de duplicidade (ex: email já existe)
-        //
         if (errorData.errors) {
-          // Erro de validação (pega o primeiro)
+          // Erros de validação (ex: @Email inválido)
           const firstErrorKey = Object.keys(errorData.errors)[0]
           setError(errorData.errors[firstErrorKey])
         } else {
-          // Erro de duplicidade (ex: 409 Conflict)
-          setError(errorData.message)
+          // Erros genéricos (ex: DuplicateResourceException)
+          setError(errorData.message || "Ocorreu um erro ao criar a conta.")
         }
       }
     } catch (err) {
-      console.error("Erro de conexão:", err) // Adicionamos um console.error para ver o erro
-      setError("Não foi possível conectar ao servidor. Verifique o console (F12) e tente novamente.")
+      console.error("Erro de conexão:", err)
+      setError("Não foi possível conectar ao servidor.")
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl">
+      <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Image src="/images/librishare-logo.png" alt="LibriShare" width={120} height={120} className="mx-auto mb-4" />
+          <Image src="/images/librishare-logo.png" alt="LibriShare" width={100} height={100} className="mx-auto mb-4" />
           <h1 className="text-3xl font-bold text-white mb-2">Criar Conta</h1>
           <p className="text-slate-300">Junte-se à comunidade LibriShare</p>
         </div>
 
-        <Card className="border-0 shadow-2xl bg-white backdrop-blur-sm">
+        <Card className="border-0 shadow-2xl bg-white/95 backdrop-blur-sm">
           <CardHeader className="space-y-1 pb-4">
             <CardTitle className="text-xl text-center text-slate-800">Cadastre-se</CardTitle>
             <CardDescription className="text-center text-slate-600">
-              Preencha os dados abaixo para criar sua conta
+              Preencha os dados básicos para começar
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <Alert className="border-emerald-200 bg-emerald-50">
-              <Shield className="h-4 w-4 text-emerald-600" />
-              <AlertDescription className="text-sm text-slate-700">
-                <strong>Informações de Segurança:</strong> Para solicitar empréstimos de livros, é necessário fornecer
-                CPF, data de nascimento e endereço completo. Seus dados são protegidos e usados apenas para fins de
-                segurança.
-              </AlertDescription>
-            </Alert>
-
-            {/* Mostra o erro da API aqui */}
+            
             {error && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Erro no Cadastro</AlertTitle>
+                <AlertTitle>Erro</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
 
-            {/* Adicionamos o 'onSubmit' ao formulário */}
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium text-slate-800 border-b border-slate-200 pb-2">
-                  Informações Pessoais
-                </h3>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName" className="text-slate-700 font-medium">
-                      Nome *
-                    </Label>
-                    <Input
-                      id="firstName"
-                      placeholder="Seu nome"
-                      className="border-slate-300 focus:border-emerald-500"
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName" className="text-slate-700 font-medium">
-                      Sobrenome *
-                    </Label>
-                    <Input
-                      id="lastName"
-                      placeholder="Seu sobrenome"
-                      className="border-slate-300 focus:border-emerald-500"
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="cpf" className="text-slate-700 font-medium">
-                      CPF *
-                    </Label>
-                    <Input
-                      id="cpf"
-                      placeholder="000.000.000-00"
-                      className="border-slate-300 focus:border-emerald-500"
-                      value={cpf}
-                      onChange={(e) => setCpf(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="birthDate" className="text-slate-700 font-medium">
-                      Data de Nascimento
-                    </Label>
-                    <Input
-                      id="birthDate"
-                      type="date"
-                      className="border-slate-300 focus:border-emerald-500"
-                      value={birthDate}
-                      onChange={(e) => setBirthDate(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium text-slate-800 border-b border-slate-200 pb-2">Endereço</h3>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="col-span-2 space-y-2">
-                    <Label htmlFor="street" className="text-slate-700 font-medium">
-                      Rua
-                    </Label>
-                    <Input
-                      id="street"
-                      placeholder="Nome da rua"
-                      className="border-slate-300 focus:border-emerald-500"
-                      value={street}
-                      onChange={(e) => setStreet(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="number" className="text-slate-700 font-medium">
-                      Número
-                    </Label>
-                    <Input
-                      id="number"
-                      placeholder="123"
-                      className="border-slate-300 focus:border-emerald-500"
-                      value={number}
-                      onChange={(e) => setNumber(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="neighborhood" className="text-slate-700 font-medium">
-                      Bairro
-                    </Label>
-                    <Input
-                      id="neighborhood"
-                      placeholder="Nome do bairro"
-                      className="border-slate-300 focus:border-emerald-500"
-                      value={neighborhood}
-                      onChange={(e) => setNeighborhood(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="complement" className="text-slate-700 font-medium">
-                      Complemento
-                    </Label>
-                    <Input
-                      id="complement"
-                      placeholder="Apto, casa, etc."
-                      className="border-slate-300 focus:border-emerald-500"
-                      value={complement}
-                      onChange={(e) => setComplement(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="city" className="text-slate-700 font-medium">
-                      Cidade
-                    </Label>
-                    <Input
-                      id="city"
-                      placeholder="Sua cidade"
-                      className="border-slate-300 focus:border-emerald-500"
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="state" className="text-slate-700 font-medium">
-                      Estado
-                    </Label>
-                    <Input
-                      id="state"
-                      placeholder="UF"
-                      className="border-slate-300 focus:border-emerald-500"
-                      value={state}
-                      onChange={(e) => setState(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="zipCode" className="text-slate-700 font-medium">
-                      CEP
-                    </Label>
-                    <Input
-                      id="zipCode"
-                      placeholder="00000-000"
-                      className="border-slate-300 focus:border-emerald-500"
-                      value={zipCode}
-                      onChange={(e) => setZipCode(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium text-slate-800 border-b border-slate-200 pb-2">
-                  Credenciais da Conta
-                </h3>
-
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-slate-700 font-medium">
-                    Email *
-                  </Label>
+                  <Label htmlFor="firstName">Nome</Label>
                   <Input
-                    id="email"
-                    type="email"
-                    placeholder="seu@email.com"
-                    className="border-slate-300 focus:border-emerald-500"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    id="firstName"
+                    placeholder="João"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
                     required
                   />
                 </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="password" className="text-slate-700 font-medium">
-                    Senha *
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Sua senha (mín. 8 caracteres)"
-                      className="border-slate-300 focus:border-emerald-500 pr-10"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4 text-slate-500" />
-                      ) : (
-                        <Eye className="h-4 w-4 text-slate-500" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword" className="text-slate-700 font-medium">
-                    Confirmar Senha *
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="confirmPassword"
-                      type={showConfirmPassword ? "text" : "password"}
-                      placeholder="Confirme sua senha"
-                      className="border-slate-300 focus:border-emerald-500 pr-10"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      required
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    >
-                      {showConfirmPassword ? (
-                        <EyeOff className="h-4 w-4 text-slate-500" />
-                      ) : (
-                        <Eye className="h-4 w-4 text-slate-500" />
-                      )}
-                    </Button>
-                  </div>
+                  <Label htmlFor="lastName">Sobrenome</Label>
+                  <Input
+                    id="lastName"
+                    placeholder="Silva"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    required
+                  />
                 </div>
               </div>
 
-              {/* Adicionamos o 'disabled={loading}' */}
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="seu@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password">Senha</Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Mínimo 6 caracteres"
+                    className="pr-10"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4 text-slate-500" /> : <Eye className="h-4 w-4 text-slate-500" />}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirmar Senha</Label>
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? "text" : "password"}
+                    placeholder="Repita a senha"
+                    className="pr-10"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4 text-slate-500" /> : <Eye className="h-4 w-4 text-slate-500" />}
+                  </Button>
+                </div>
+              </div>
+
               <Button
                 type="submit"
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-3 text-base"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
                 disabled={loading}
               >
-                {loading ? "Criando conta..." : "Criar Conta"}
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Criar Conta"}
               </Button>
             </form>
-            
-            {/* O resto do arquivo continua igual... */}
+
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <Separator className="w-full" />
@@ -408,8 +223,9 @@ export default function SignUpPage() {
 
             <Button
               variant="outline"
-              className="w-full border-slate-300 hover:bg-slate-50 bg-white text-slate-700 font-medium"
-              disabled={loading} // Também aqui
+              className="w-full"
+              disabled={loading}
+              onClick={handleGoogleLogin}
             >
               <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
                 <path
