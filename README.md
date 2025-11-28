@@ -1,6 +1,6 @@
 # 📚 LibriShare - Front-end
 
-![LibriShare Cover](librishare/public/placeholder-logo.png)
+![LibriShare Cover](librishare/public/images/librishare-logo.png)
 
 > **Sua biblioteca pessoal, reinventada.** > O LibriShare é uma plataforma open-source para organizar sua coleção de livros, acompanhar seu progresso de leitura e gerenciar empréstimos para amigos de forma simples e visual.
 
@@ -20,7 +20,6 @@ Este front-end consome a API REST do LibriShare e oferece as seguintes funcional
 * **🤝 Controle de Empréstimos:** Registre para quem você emprestou seus livros físicos e monitore datas de devolução.
 * **📈 Progresso de Leitura:** Gamifique sua leitura atualizando a página atual e visualizando barras de progresso.
 * **💌 Lista de Desejos:** Salve livros que deseja comprar com links diretos.
-* **🌓 Modo Escuro:** Interface nativa em Dark Mode para conforto visual.
 
 ---
 
