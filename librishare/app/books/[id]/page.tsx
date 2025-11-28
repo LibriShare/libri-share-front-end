@@ -18,6 +18,7 @@ import {
 import Link from "next/link"
 import Image from "next/image"
 import { useToast } from "@/hooks/use-toast"
+import { useUserId } from "@/hooks/use-user-id" 
 
 interface BookData {
   id: number
@@ -30,15 +31,14 @@ interface BookData {
   coverImageUrl: string
   synopsis?: string
   genre?: string
-  price?: number        // --- NOVO ---
-  purchaseUrl?: string  // --- NOVO ---
+  price?: number
+  purchaseUrl?: string
 }
 
 export default function BookDetailsPage({ params }: { params: { id: string } }) {
   const [book, setBook] = useState<BookData | null>(null)
   const [loading, setLoading] = useState(true)
   
-  // Dados do Usuário (Vínculo)
   const [userBookId, setUserBookId] = useState<number | null>(null)
   const [currentStatus, setCurrentStatus] = useState("to-read")
   const [userRating, setUserRating] = useState(0)
@@ -46,31 +46,24 @@ export default function BookDetailsPage({ params }: { params: { id: string } }) 
   const [isInLibrary, setIsInLibrary] = useState(false)
   const [isSavingReview, setIsSavingReview] = useState(false)
 
-  // Edição de Sinopse
   const [isEditingSynopsis, setIsEditingSynopsis] = useState(false)
   const [synopsisText, setSynopsisText] = useState("")
   const [isSavingSynopsis, setIsSavingSynopsis] = useState(false)
-
-  // Edição de Imagem de Capa
   const [isImageDialogOpen, setIsImageDialogOpen] = useState(false)
   const [newImageUrl, setNewImageUrl] = useState("")
   const [isSavingImage, setIsSavingImage] = useState(false)
-
-  // --- NOVO: Estados para Edição de Informações Gerais ---
   const [isInfoDialogOpen, setIsInfoDialogOpen] = useState(false)
   const [editTitle, setEditTitle] = useState("")
   const [editAuthor, setEditAuthor] = useState("")
   const [editPrice, setEditPrice] = useState("")
   const [editLink, setEditLink] = useState("")
   const [isSavingInfo, setIsSavingInfo] = useState(false)
-  // ------------------------------------------------------
-
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false)
-  const { toast } = useToast()
-  const API_URL = process.env.NEXT_PUBLIC_API_URL
-  const USER_ID = 1
 
-  // --- 1. Buscar Dados do Livro ---
+  const { toast } = useToast()
+  const { userId } = useUserId()
+  const API_URL = process.env.NEXT_PUBLIC_API_URL
+
   useEffect(() => {
     const fetchBookDetails = async () => {
       try {
@@ -79,11 +72,9 @@ export default function BookDetailsPage({ params }: { params: { id: string } }) 
           const data = await response.json()
           setBook({ ...data, genre: "Geral" })
           
-          // Preenche estados de edição
           setSynopsisText(data.synopsis || "")
           setNewImageUrl(data.coverImageUrl || "")
           
-          // --- NOVO: Preenche estados de edição info ---
           setEditTitle(data.title || "")
           setEditAuthor(data.author || "")
           setEditPrice(data.price || "")
@@ -98,10 +89,11 @@ export default function BookDetailsPage({ params }: { params: { id: string } }) 
     if (params.id) fetchBookDetails()
   }, [params.id, API_URL])
 
-  // --- 2. Buscar Dados da Biblioteca do Usuário ---
   const fetchUserLibraryInfo = useCallback(async () => {
+    if (!userId) return 
+
     try {
-      const response = await fetch(`${API_URL}/api/v1/users/${USER_ID}/library`)
+      const response = await fetch(`${API_URL}/api/v1/users/${userId}/library`)
       if (response.ok) {
         const library: any[] = await response.json()
         const found = library.find((item) => item.bookId === Number(params.id))
@@ -119,19 +111,18 @@ export default function BookDetailsPage({ params }: { params: { id: string } }) 
     } catch (error) {
       console.error(error)
     }
-  }, [API_URL, params.id, USER_ID])
+  }, [API_URL, params.id, userId])
 
   useEffect(() => {
     fetchUserLibraryInfo()
   }, [fetchUserLibraryInfo])
 
-  // --- Helpers ---
   const mapBackendStatusToFrontend = (status: string) => {
     switch (status) {
       case "READ": return "read"; 
       case "READING": return "reading"; 
       case "TO_READ": return "tbr"; 
-      default: return "to-read";
+      default: return "to-read"; 
     }
   }
   const getStatusLabel = (status: string) => {
@@ -151,17 +142,15 @@ export default function BookDetailsPage({ params }: { params: { id: string } }) 
     }
   }
 
-  // --- Ações ---
-
   const handleStatusChange = async (newStatus: string) => {
-    if (!userBookId) return
+    if (!userBookId || !userId) return
     let backendStatus = "WANT_TO_READ";
     if (newStatus === "read") backendStatus = "READ";
     else if (newStatus === "reading") backendStatus = "READING";
     else if (newStatus === "tbr") backendStatus = "TO_READ";
     
     try {
-      await fetch(`${API_URL}/api/v1/users/${USER_ID}/library/${userBookId}/status`, {
+      await fetch(`${API_URL}/api/v1/users/${userId}/library/${userBookId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: backendStatus })
@@ -175,9 +164,9 @@ export default function BookDetailsPage({ params }: { params: { id: string } }) 
   }
 
   const handleRateBook = async (rating: number) => {
-    if (!userBookId) return
+    if (!userBookId || !userId) return
     try {
-      await fetch(`${API_URL}/api/v1/users/${USER_ID}/library/${userBookId}/rating`, {
+      await fetch(`${API_URL}/api/v1/users/${userId}/library/${userBookId}/rating`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rating })
@@ -190,10 +179,10 @@ export default function BookDetailsPage({ params }: { params: { id: string } }) 
   }
 
   const handleSaveReview = async () => {
-    if (!userBookId) return
+    if (!userBookId || !userId) return
     setIsSavingReview(true)
     try {
-      const response = await fetch(`${API_URL}/api/v1/users/${USER_ID}/library/${userBookId}/review`, {
+      const response = await fetch(`${API_URL}/api/v1/users/${userId}/library/${userBookId}/review`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ review: userReview })
@@ -206,7 +195,6 @@ export default function BookDetailsPage({ params }: { params: { id: string } }) 
     }
   }
 
-  // --- Função Genérica para Atualizar dados do Livro (PUT) ---
   const updateBookData = async (dataToUpdate: Partial<BookData>) => {
     if (!book) return;
     try {
@@ -217,7 +205,7 @@ export default function BookDetailsPage({ params }: { params: { id: string } }) 
             coverImageUrl: book.coverImageUrl,
             price: book.price,
             purchaseUrl: book.purchaseUrl,
-            ...dataToUpdate // Sobrescreve com os novos valores
+            ...dataToUpdate 
         };
 
         const response = await fetch(`${API_URL}/api/v1/books/${book.id}`, {
@@ -241,7 +229,6 @@ export default function BookDetailsPage({ params }: { params: { id: string } }) 
     }
   }
 
-  // Salvar Sinopse
   const handleSaveSynopsis = async () => {
     setIsSavingSynopsis(true)
     const success = await updateBookData({ synopsis: synopsisText });
@@ -249,7 +236,6 @@ export default function BookDetailsPage({ params }: { params: { id: string } }) 
     setIsSavingSynopsis(false)
   }
 
-  // Salvar Imagem
   const handleSaveImage = async () => {
     if (!newImageUrl.trim()) {
         toast({ title: "A URL da imagem não pode estar vazia", variant: "destructive" });
@@ -261,7 +247,6 @@ export default function BookDetailsPage({ params }: { params: { id: string } }) 
     setIsSavingImage(false)
   }
 
-  // --- NOVO: Salvar Informações Gerais (Título, Autor, Preço, Link) ---
   const handleSaveInfo = async () => {
     setIsSavingInfo(true)
     const success = await updateBookData({ 
@@ -273,18 +258,20 @@ export default function BookDetailsPage({ params }: { params: { id: string } }) 
     if (success) setIsInfoDialogOpen(false);
     setIsSavingInfo(false)
   }
-  // --------------------------------------------------------------------
-
 
   if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>
   if (!book) return <div>Livro não encontrado</div>
 
   return (
-    <div className="min-h-screen bg-background">
-      <DashboardHeader />
-      <div className="flex">
-        <aside className="hidden lg:block border-r bg-card/50"><Sidebar /></aside>
-        <main className="flex-1 px-4 py-8">
+    <div className="flex h-screen bg-background w-full">
+      <div className="hidden lg:block">
+        <Sidebar />
+      </div>
+
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <DashboardHeader />
+        
+        <main className="flex-1 overflow-y-auto p-6">
           <div className="max-w-4xl mx-auto space-y-6">
             <Link href="/library" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
               <ArrowLeft className="h-4 w-4" /> Voltar
@@ -292,7 +279,6 @@ export default function BookDetailsPage({ params }: { params: { id: string } }) 
 
             <div className="flex flex-col md:flex-row gap-6">
               
-              {/* --- ÁREA DA IMAGEM COM EDIÇÃO --- */}
               <div className="flex-shrink-0 mx-auto md:mx-0">
                 <Dialog open={isImageDialogOpen} onOpenChange={setIsImageDialogOpen}>
                     <DialogTrigger asChild>
@@ -322,6 +308,7 @@ export default function BookDetailsPage({ params }: { params: { id: string } }) 
                             </div>
                             {newImageUrl && (
                                 <div className="relative h-[200px] w-full rounded-md overflow-hidden border mt-2 bg-muted">
+                                     {/* eslint-disable-next-line @next/next/no-img-element */}
                                      <img src={newImageUrl} alt="Pré-visualização" className="h-full w-full object-contain" 
                                           onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.svg"; }} />
                                 </div>
@@ -343,7 +330,6 @@ export default function BookDetailsPage({ params }: { params: { id: string } }) 
                   <h1 className="text-3xl font-bold text-balance">{book.title}</h1>
                   <p className="text-xl text-muted-foreground">{book.author}</p>
                   
-                  {/* --- NOVO: Exibição de Preço e Link --- */}
                   <div className="flex flex-wrap gap-4 mt-3 text-sm items-center">
                     {book.price && (
                         <span className="text-emerald-500 font-bold text-lg bg-emerald-500/10 px-2 py-1 rounded">
@@ -356,7 +342,6 @@ export default function BookDetailsPage({ params }: { params: { id: string } }) 
                         </a>
                     )}
                   </div>
-                  {/* ------------------------------------- */}
                 </div>
 
                 {isInLibrary ? (
@@ -397,7 +382,6 @@ export default function BookDetailsPage({ params }: { params: { id: string } }) 
                             </DialogContent>
                          </Dialog>
 
-                         {/* --- NOVO: BOTÃO DE EDITAR INFORMAÇÕES GERAIS --- */}
                          <Dialog open={isInfoDialogOpen} onOpenChange={setIsInfoDialogOpen}>
                             <DialogTrigger asChild>
                                 <Button variant="outline">
@@ -444,7 +428,6 @@ export default function BookDetailsPage({ params }: { params: { id: string } }) 
                                 </DialogFooter>
                             </DialogContent>
                         </Dialog>
-                        {/* -------------------------------------------------- */}
 
                       </div>
                   </div>

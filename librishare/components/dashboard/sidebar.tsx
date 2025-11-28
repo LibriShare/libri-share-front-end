@@ -16,6 +16,7 @@ import {
   User 
 } from "lucide-react"
 import { useEffect, useState } from "react"
+import { useUserId } from "@/hooks/use-user-id" // Importe o hook
 
 interface LibraryStats {
   totalBooks: number
@@ -27,6 +28,7 @@ interface LibraryStats {
 
 export function Sidebar() {
   const pathname = usePathname()
+  const { userId } = useUserId() // Usa o hook seguro
   const [stats, setStats] = useState<LibraryStats>({
     totalBooks: 0,
     booksRead: 0,
@@ -36,12 +38,14 @@ export function Sidebar() {
   })
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL
-  const USER_ID = 1 
 
   useEffect(() => {
+    // Só busca se tivermos um userId válido
+    if (!userId) return
+
     const fetchStats = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/v1/users/${USER_ID}/library/stats`)
+        const response = await fetch(`${API_URL}/api/v1/users/${userId}/library/stats`)
         if (response.ok) {
           const data = await response.json()
           setStats(data)
@@ -52,13 +56,10 @@ export function Sidebar() {
     }
 
     fetchStats()
-  }, [API_URL])
+  }, [API_URL, userId])
 
-  // --- CORREÇÃO AQUI ---
-  // Verifica se é a rota exata OU se é uma sub-rota real (ex: /books/1 é sub de /books, mas /reading NÃO é sub de /read)
   const isActive = (href: string) => {
       if (href === "/dashboard") return pathname === "/dashboard"
-      // A lógica abaixo garante que só ativa se for exato ou se tiver uma barra depois (ex: /read/123)
       return pathname === href || pathname.startsWith(`${href}/`)
   }
 

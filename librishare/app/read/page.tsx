@@ -1,14 +1,15 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Sidebar } from "@/components/dashboard/sidebar"
-import { DashboardHeader } from "@/components/dashboard/header" // Corrigido import
+import { DashboardHeader } from "@/components/dashboard/header"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Star, Calendar, BookOpen, Loader2, RotateCcw } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
+import { useUserId } from "@/hooks/use-user-id" // <--- 1. Importar o Hook
 
 interface ReadBook {
   id: number       // UserBook ID
@@ -26,13 +27,18 @@ export default function ReadPage() {
   const [books, setBooks] = useState<ReadBook[]>([])
   const [loading, setLoading] = useState(true)
   const { toast } = useToast()
+  
+  const { userId } = useUserId() // <--- 2. Pegar ID dinâmico
   const API_URL = process.env.NEXT_PUBLIC_API_URL
-  const USER_ID = 1
 
-  const fetchReadBooks = async () => {
+  // Envolver em useCallback para usar no useEffect
+  const fetchReadBooks = useCallback(async () => {
+    if (!userId) return // <--- 3. Só busca se tiver ID
+
     try {
       setLoading(true)
-      const response = await fetch(`${API_URL}/api/v1/users/${USER_ID}/library`)
+      // <--- 4. Usar userId na URL
+      const response = await fetch(`${API_URL}/api/v1/users/${userId}/library`)
       
       if (response.ok) {
         const data = await response.json()
@@ -46,7 +52,7 @@ export default function ReadPage() {
             author: item.author,
             cover: item.coverImageUrl || "/placeholder.svg",
             rating: item.rating || 0,
-            finishedDate: item.finishedReadingAt || item.addedAt, // Fallback
+            finishedDate: item.finishedReadingAt || item.addedAt, // Fallback se não tiver data de término
             pages: item.totalPages || 0,
             review: item.review || "Sem resenha.",
           }))
@@ -58,17 +64,19 @@ export default function ReadPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [API_URL, userId])
 
   useEffect(() => {
     fetchReadBooks()
-  }, [API_URL])
+  }, [fetchReadBooks])
 
   // Função para Reler (muda status para LENDO e zera progresso opcionalmente)
   const handleReread = async (userBookId: number) => {
+    if (!userId) return
+
     try {
        // 1. Muda status para READING
-       const responseStatus = await fetch(`${API_URL}/api/v1/users/${USER_ID}/library/${userBookId}/status`, {
+       const responseStatus = await fetch(`${API_URL}/api/v1/users/${userId}/library/${userBookId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "READING" })
@@ -76,7 +84,7 @@ export default function ReadPage() {
 
       if (responseStatus.ok) {
          // 2. Opcional: Resetar páginas lidas para 0
-         await fetch(`${API_URL}/api/v1/users/${USER_ID}/library/${userBookId}/progress`, {
+         await fetch(`${API_URL}/api/v1/users/${userId}/library/${userBookId}/progress`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ currentPage: 0 })

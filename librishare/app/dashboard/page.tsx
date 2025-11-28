@@ -25,7 +25,14 @@ export default function DashboardPage() {
   const [loadingLoans, setLoadingLoans] = useState(true)
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL
-  const USER_ID = 1
+  const getUserId = () => {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem("librishare_user_id") || 1
+  }
+  return 1
+}
+
+const USER_ID = getUserId()
 
   useEffect(() => {
     const fetchData = async () => {

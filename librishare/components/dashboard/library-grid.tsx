@@ -10,6 +10,7 @@ import { Search, Grid, List, Star, Clock, CheckCircle, BookOpen, Loader2, Bookma
 import Link from "next/link"
 import Image from "next/image"
 import { useToast } from "@/hooks/use-toast"
+import { useUserId } from "@/hooks/use-user-id" // Importe o Hook de ID
 
 interface Book {
   id: string
@@ -17,7 +18,7 @@ interface Book {
   title: string
   author: string
   cover: string
-  status: "read" | "reading" | "tbr" // Adicionado "tbr" (To Be Read)
+  status: "read" | "reading" | "tbr"
   rating?: number
   genre: string
   pages: number
@@ -31,17 +32,22 @@ export function LibraryGrid() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const { toast } = useToast()
   
+  // Usa o ID dinâmico
+  const { userId } = useUserId() 
   const API_URL = process.env.NEXT_PUBLIC_API_URL
 
   useEffect(() => {
+    // Só busca se tiver ID
+    if (!userId) return 
+
     const fetchLibrary = async () => {
       try {
         setLoading(true)
-        const response = await fetch(`${API_URL}/api/v1/users/1/library`)
+        // Usa userId da variável
+        const response = await fetch(`${API_URL}/api/v1/users/${userId}/library`)
         if (response.ok) {
           const data = await response.json()
           
-          // Filtra: Mostra tudo que NÃO é Lista de Desejos (ou seja: Lidos, Lendo e Para Ler)
           const myBooks = data.filter((item: any) => item.status !== "WANT_TO_READ");
 
           const mappedBooks: Book[] = myBooks.map((item: any) => ({
@@ -65,13 +71,13 @@ export function LibraryGrid() {
     }
 
     fetchLibrary()
-  }, [])
+  }, [userId, API_URL]) // Recarrega quando o userId muda
 
   const mapStatus = (backendStatus: string): "read" | "reading" | "tbr" => {
     switch (backendStatus) {
       case "READ": return "read"
       case "READING": return "reading"
-      case "TO_READ": return "tbr" // Mapeia o novo status do backend
+      case "TO_READ": return "tbr"
       default: return "tbr"
     }
   }
@@ -84,11 +90,12 @@ export function LibraryGrid() {
     return matchesSearch && matchesStatus
   })
 
+  // ... (MANTENHA AS FUNÇÕES getStatusIcon, getStatusLabel, getStatusColor, renderStars IGUAIS) ...
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "read": return <CheckCircle className="h-4 w-4 text-secondary" />
       case "reading": return <Clock className="h-4 w-4 text-primary" />
-      case "tbr": return <Bookmark className="h-4 w-4 text-indigo-500" /> // Ícone para "Para Ler"
+      case "tbr": return <Bookmark className="h-4 w-4 text-indigo-500" />
       default: return null
     }
   }
@@ -106,7 +113,7 @@ export function LibraryGrid() {
     switch (status) {
       case "read": return "bg-secondary/10 text-secondary-foreground border-secondary/20"
       case "reading": return "bg-primary/10 text-primary-foreground border-primary/20"
-      case "tbr": return "bg-indigo-500/10 text-indigo-600 border-indigo-500/20" // Cor distinta
+      case "tbr": return "bg-indigo-500/10 text-indigo-600 border-indigo-500/20"
       default: return "bg-muted"
     }
   }

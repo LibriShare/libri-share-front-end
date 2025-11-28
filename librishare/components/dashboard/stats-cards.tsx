@@ -2,22 +2,30 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { BookOpen, Users, Clock, TrendingUp, Loader2, Heart } from "lucide-react" // Importei Heart
+import { BookOpen, Users, Clock, TrendingUp, Loader2, Heart } from "lucide-react"
+import { useUserId } from "@/hooks/use-user-id" // Importe o hook
 
 export function StatsCards() {
   const [stats, setStats] = useState({
     totalBooks: 0,
     booksRead: 0,
     booksReading: 0,
-    booksToRead: 0 // Isso vem do backend correspondendo a WANT_TO_READ
+    booksToRead: 0
   })
   const [loading, setLoading] = useState(true)
+  const { userId } = useUserId() // Hook seguro
 
   useEffect(() => {
+    if (!userId) {
+        setLoading(false)
+        return
+    }
+
     const fetchStats = async () => {
       try {
+        setLoading(true)
         const API_URL = process.env.NEXT_PUBLIC_API_URL
-        const response = await fetch(`${API_URL}/api/v1/users/1/library/stats`)
+        const response = await fetch(`${API_URL}/api/v1/users/${userId}/library/stats`)
         
         if (response.ok) {
           const data = await response.json()
@@ -31,7 +39,7 @@ export function StatsCards() {
     }
 
     fetchStats()
-  }, [])
+  }, [userId])
 
   if (loading) {
     return <div className="flex justify-center p-4"><Loader2 className="animate-spin text-primary" /></div>
@@ -60,11 +68,10 @@ export function StatsCards() {
       color: "text-accent-foreground",
     },
     {
-      // --- ALTERAÇÃO AQUI: Mudado de "Para Ler" para "Lista de Desejos" ---
       title: "Lista de Desejos",
       value: stats.booksToRead,
-      description: "Livros que quero", // Descrição mais adequada
-      icon: Heart, // Ícone de coração faz mais sentido para desejos
+      description: "Livros que quero",
+      icon: Heart,
       color: "text-chart-4",
     },
   ]

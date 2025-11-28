@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input"
@@ -21,7 +21,6 @@ import {
   BookOpen,
   Star,
   Calendar,
-  // MapPin, // <-- REMOVIDO: Não precisamos mais importar o MapPin
   Edit,
   User,
   Pencil,
@@ -35,10 +34,9 @@ import {
 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useToast } from "@/hooks/use-toast"
-import { format, parseISO } from "date-fns"
+import { format, parseISO, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
-// ... (MANTENHA AS CONSTANTES E INTERFACES IGUAIS AQUI) ...
 const AVATAR_OPTIONS = [
   "🦊", "🐱", "🐶", "🦁", "🐯", "🐨", "🐼", "🐸",
   "🐙", "🦄", "🐲", "👽", "🤖", "👻", "💀", "🤠",
@@ -61,18 +59,6 @@ interface HistoryItem {
   createdAt: string
 }
 
-interface SecurityInfo {
-  cpf: string
-  birthDate: string
-  address: {
-    street: string
-    number: string
-    city: string
-    state: string
-    zipCode: string
-  }
-}
-
 interface UserProfileData {
   firstName: string
   lastName: string
@@ -83,9 +69,7 @@ interface UserProfileData {
 }
 
 export function UserProfile() {
-  // ... (MANTENHA TODOS OS ESTADOS E O USEEFFECT IGUAIS AQUI) ...
   const [profile, setProfile] = useState<UserProfileData | null>(null)
-  const [securityInfo, setSecurityInfo] = useState<SecurityInfo | null>(null)
   const [activity, setActivity] = useState<HistoryItem[]>([])
   
   const [stats, setStats] = useState<UserStats>({
@@ -101,26 +85,38 @@ export function UserProfile() {
   const [error, setError] = useState<string | null>(null)
   
   const [isEditing, setIsEditing] = useState(false)
-  const [isEditingSecurity, setIsEditingSecurity] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   
   const [isGoalDialogOpen, setIsGoalDialogOpen] = useState(false)
   const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false)
+  
+  const [userId, setUserId] = useState<string | null>(null)
 
   const { toast } = useToast()
   const API_URL = process.env.NEXT_PUBLIC_API_URL
-  const USER_ID = 1
 
   useEffect(() => {
+    const storedId = localStorage.getItem("librishare_user_id")
+    if (storedId) {
+        setUserId(storedId)
+    } else {
+        setError("Usuário não identificado. Faça login novamente.")
+        setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!userId) return
+
     const fetchData = async () => {
       try {
         setLoading(true)
         setError(null)
 
         const [userRes, libraryRes, historyRes] = await Promise.all([
-          fetch(`${API_URL}/api/v1/users/${USER_ID}`),
-          fetch(`${API_URL}/api/v1/users/${USER_ID}/library`),
-          fetch(`${API_URL}/api/v1/users/${USER_ID}/history`)
+          fetch(`${API_URL}/api/v1/users/${userId}`),
+          fetch(`${API_URL}/api/v1/users/${userId}/library`),
+          fetch(`${API_URL}/api/v1/users/${userId}/history`)
         ])
 
         if (!userRes.ok) throw new Error("Falha ao carregar usuário")
@@ -129,16 +125,24 @@ export function UserProfile() {
         const libraryData = libraryRes.ok ? await libraryRes.json() : []
         
         if (historyRes.ok) {
-            setActivity(await historyRes.json())
+            const historyData = await historyRes.json()
+            setActivity(Array.isArray(historyData) ? historyData : [])
         }
 
+        // --- CÁLCULOS DE ESTATÍSTICAS CORRIGIDOS ---
+        const booksRead = Array.isArray(libraryData) ? libraryData.filter((b: any) => b.status === 'READ').length : 0;
+        const currentlyReading = Array.isArray(libraryData) ? libraryData.filter((b: any) => b.status === 'READING').length : 0;
+        const wishlist = Array.isArray(libraryData) ? libraryData.filter((b: any) => b.status === 'WANT_TO_READ').length : 0;
+        const tbr = Array.isArray(libraryData) ? libraryData.filter((b: any) => b.status === 'TO_READ').length : 0;
+
         const statsCalc = {
-            totalBooks: libraryData.length,
-            booksRead: libraryData.filter((b: any) => b.status === 'READ').length,
-            currentlyReading: libraryData.filter((b: any) => b.status === 'READING').length,
-            wishlist: libraryData.filter((b: any) => b.status === 'WANT_TO_READ').length,
+            // Total = Lidos + Lendo + Para Ler (Exclui Lista de Desejos)
+            totalBooks: booksRead + currentlyReading + tbr, 
+            booksRead: booksRead,
+            currentlyReading: currentlyReading,
+            wishlist: wishlist,
             readingGoal: userData.annualReadingGoal || 12,
-            booksThisYear: libraryData.filter((b: any) => b.status === 'READ').length
+            booksThisYear: booksRead // Simplificação: conta total de lidos como "este ano"
         }
         setStats(statsCalc)
 
@@ -160,18 +164,6 @@ export function UserProfile() {
           avatar: userData.avatar || "🦊"
         })
 
-        setSecurityInfo({
-          cpf: userData.cpf || "",
-          birthDate: userData.dateOfBirth || "",
-          address: {
-            street: userData.addressStreet || "",
-            number: "S/N",
-            city: userData.addressCity || "",
-            state: userData.addressState || "",
-            zipCode: userData.addressZip || "",
-          },
-        })
-
       } catch (err: any) {
         console.error(err)
         setError("Erro ao carregar perfil.")
@@ -181,29 +173,23 @@ export function UserProfile() {
     }
 
     fetchData()
-  }, [API_URL])
+  }, [API_URL, userId])
 
   const handleSaveAll = async () => {
-    if (!profile || !securityInfo) return
+    if (!profile || !userId) return
     setIsSaving(true)
 
     const payload = {
         firstName: profile.firstName,
         lastName: profile.lastName,
         email: profile.email,
-        cpf: securityInfo.cpf,
-        dateOfBirth: securityInfo.birthDate,
         biography: profile.bio,
-        addressStreet: securityInfo.address.street,
-        addressCity: securityInfo.address.city,
-        addressState: securityInfo.address.state,
-        addressZip: securityInfo.address.zipCode,
         annualReadingGoal: stats.readingGoal,
         avatar: profile.avatar 
     }
 
     try {
-        const response = await fetch(`${API_URL}/api/v1/users/${USER_ID}`, {
+        const response = await fetch(`${API_URL}/api/v1/users/${userId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -212,7 +198,6 @@ export function UserProfile() {
         if (response.ok) {
             toast({ title: "Sucesso", description: "Dados atualizados com sucesso!" })
             setIsEditing(false)
-            setIsEditingSecurity(false)
             setIsGoalDialogOpen(false)
             setIsAvatarDialogOpen(false)
         } else {
@@ -244,8 +229,28 @@ export function UserProfile() {
     }
   }
 
+  const formatActivityDate = (dateString: string) => {
+      try {
+          const date = parseISO(dateString)
+          if (isValid(date)) {
+              return format(date, "dd 'de' MMMM 'às' HH:mm", { locale: ptBR })
+          }
+          return "Data inválida"
+      } catch (e) {
+          return "Data desconhecida"
+      }
+  }
+
   if (loading) return <div className="flex justify-center p-20"><Loader2 className="animate-spin h-10 w-10 text-primary" /></div>
-  if (error || !profile || !securityInfo) return <Alert variant="destructive"><AlertTitle>Erro</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>
+  
+  if (error) return (
+    <Alert variant="destructive">
+        <AlertTitle>Erro</AlertTitle>
+        <AlertDescription>{error}</AlertDescription>
+    </Alert>
+  )
+
+  if (!profile) return null
 
   const readingProgress = stats.readingGoal > 0 ? Math.min(100, (stats.booksThisYear / stats.readingGoal) * 100) : 0
 
@@ -255,8 +260,6 @@ export function UserProfile() {
       <Card>
         <CardContent className="p-6">
           <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-            
-            {/* --- ÁREA DO AVATAR --- */}
             <div className="relative group">
                 <Avatar className="h-24 w-24 border-4 border-muted bg-secondary cursor-pointer hover:opacity-90 transition-opacity">
                     <AvatarFallback className="text-4xl bg-transparent">
@@ -264,7 +267,6 @@ export function UserProfile() {
                     </AvatarFallback>
                 </Avatar>
                 
-                {/* --- MUDANÇA 1: Dialog só abre se isEditing for true --- */}
                 <Dialog open={isAvatarDialogOpen} onOpenChange={setIsAvatarDialogOpen}>
                     {isEditing && (
                       <DialogTrigger asChild>
@@ -306,7 +308,6 @@ export function UserProfile() {
                 </div>
                 <p className="text-muted-foreground">{profile.bio}</p>
                 <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2">
-                  {/* --- MUDANÇA 2: REMOVIDO DIV DE CIDADE, UF --- */}
                   <div className="flex items-center gap-1">
                     <Calendar className="h-4 w-4" />
                     Membro desde {profile.joinDate}
@@ -322,7 +323,6 @@ export function UserProfile() {
             </Button>
           </div>
 
-          {/* ... (RESTANTE DO CÓDIGO PERMANECE IGUAL) ... */}
           {isEditing && (
              <div className="mt-6 p-4 border rounded-lg bg-muted/10 space-y-4 animate-in slide-in-from-top-2">
                 <div className="grid grid-cols-2 gap-4">
@@ -353,6 +353,7 @@ export function UserProfile() {
             <BookOpen className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
+            {/* Aqui mostramos o total calculado corretamente (sem wishlist) */}
             <div className="text-2xl font-bold">{stats.totalBooks}</div>
             <p className="text-xs text-muted-foreground">{stats.booksRead} lidos • {stats.currentlyReading} lendo</p>
           </CardContent>
@@ -387,7 +388,6 @@ export function UserProfile() {
       <Tabs defaultValue="activity" className="w-full">
         <TabsList>
           <TabsTrigger value="activity">Atividade</TabsTrigger>
-          <TabsTrigger value="security">Segurança</TabsTrigger>
         </TabsList>
 
         <TabsContent value="activity" className="mt-6">
@@ -410,7 +410,7 @@ export function UserProfile() {
                                         <p className="font-medium text-sm">{item.description}</p>
                                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                             <Calendar className="h-3 w-3" />
-                                            {format(parseISO(item.createdAt), "dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
+                                            {formatActivityDate(item.createdAt)}
                                         </div>
                                     </div>
                                 </div>
@@ -419,63 +419,6 @@ export function UserProfile() {
                     )}
                 </CardContent>
             </Card>
-        </TabsContent>
-
-        <TabsContent value="security" className="mt-6 space-y-4">
-          <Card>
-            <CardHeader>
-                <div className="flex items-center justify-between">
-                    <div>
-                        <CardTitle>Dados Pessoais</CardTitle>
-                        <CardDescription>Edite seu CPF e endereço.</CardDescription>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => setIsEditingSecurity(!isEditingSecurity)}>
-                         {isEditingSecurity ? "Cancelar" : "Editar"}
-                    </Button>
-                </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                        <Label>CPF</Label>
-                        <Input 
-                            value={securityInfo.cpf} 
-                            disabled={!isEditingSecurity} 
-                            onChange={e => setSecurityInfo({...securityInfo, cpf: e.target.value})} 
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <Label>Cidade</Label>
-                        <Input 
-                            value={securityInfo.address.city} 
-                            disabled={!isEditingSecurity} 
-                            onChange={e => setSecurityInfo({...securityInfo, address: {...securityInfo.address, city: e.target.value}})} 
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <Label>Endereço</Label>
-                        <Input 
-                            value={securityInfo.address.street} 
-                            disabled={!isEditingSecurity} 
-                            onChange={e => setSecurityInfo({...securityInfo, address: {...securityInfo.address, street: e.target.value}})} 
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <Label>CEP</Label>
-                        <Input 
-                            value={securityInfo.address.zipCode} 
-                            disabled={!isEditingSecurity} 
-                            onChange={e => setSecurityInfo({...securityInfo, address: {...securityInfo.address, zipCode: e.target.value}})} 
-                        />
-                    </div>
-                </div>
-                {isEditingSecurity && (
-                    <Button onClick={handleSaveAll} disabled={isSaving} className="mt-4">
-                        {isSaving ? "Salvando..." : "Salvar Dados de Segurança"}
-                    </Button>
-                )}
-            </CardContent>
-          </Card>
         </TabsContent>
       </Tabs>
       

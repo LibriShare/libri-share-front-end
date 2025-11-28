@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { DashboardHeader } from "@/components/dashboard/header"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { Card, CardContent } from "@/components/ui/card"
@@ -10,6 +10,7 @@ import { Clock, BookOpen, Calendar, Loader2, CheckCircle } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
+import { useUserId } from "@/hooks/use-user-id" // <--- 1. Importar o Hook de ID
 
 interface ReadingBook {
   id: number       // ID do UserBook (vínculo)
@@ -27,18 +28,22 @@ export default function ReadingPage() {
   const [books, setBooks] = useState<ReadingBook[]>([])
   const [loading, setLoading] = useState(true)
   const { toast } = useToast()
+  
+  const { userId } = useUserId() // <--- 2. Pegar o ID dinâmico do usuário logado
   const API_URL = process.env.NEXT_PUBLIC_API_URL
-  const USER_ID = 1 // Fixo por enquanto
 
-  const fetchReadingBooks = async () => {
+  const fetchReadingBooks = useCallback(async () => {
+    if (!userId) return // <--- 3. Só busca se o ID existir
+
     try {
       setLoading(true)
-      const response = await fetch(`${API_URL}/api/v1/users/${USER_ID}/library`)
+      // <--- 4. Usar userId na URL
+      const response = await fetch(`${API_URL}/api/v1/users/${userId}/library`)
       
       if (response.ok) {
         const data = await response.json()
         
-        // 1. Filtra APENAS os livros com status "READING"
+        // Filtra APENAS os livros com status "READING"
         const readingBooks = data
           .filter((item: any) => item.status === "READING")
           .map((item: any) => ({
@@ -61,16 +66,17 @@ export default function ReadingPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [API_URL, userId, toast])
 
   useEffect(() => {
     fetchReadingBooks()
-  }, [API_URL, toast])
+  }, [fetchReadingBooks])
 
-  // Função para marcar como lido diretamente da lista
   const handleMarkAsRead = async (userBookId: number) => {
+    if (!userId) return
+
     try {
-      const response = await fetch(`${API_URL}/api/v1/users/${USER_ID}/library/${userBookId}/status`, {
+      const response = await fetch(`${API_URL}/api/v1/users/${userId}/library/${userBookId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "READ" })
@@ -98,7 +104,10 @@ export default function ReadingPage() {
 
   return (
     <div className="flex h-screen bg-background">
-      <Sidebar />
+      <div className="hidden lg:block">
+        <Sidebar />
+      </div>
+      
       <div className="flex-1 flex flex-col overflow-hidden">
         <DashboardHeader />
         <main className="flex-1 overflow-y-auto p-6">

@@ -6,16 +6,18 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea" // Importei Textarea
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogDescription
+  DialogDescription,
+  DialogFooter // Importei Footer
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { 
   Plus, 
   Clock, 
@@ -27,11 +29,13 @@ import {
   Loader2, 
   Calendar as CalendarIcon,
   Mail,
-  RefreshCcw
+  RefreshCcw,
+  Send // Importei Send
 } from "lucide-react"
 import { format, isPast, parseISO, differenceInDays } from "date-fns"
 import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
+import { useUserId } from "@/hooks/use-user-id"
 
 // --- Interfaces ---
 interface BookOption {
@@ -44,7 +48,7 @@ interface Loan {
   id: number
   bookId: number       
   bookTitle: string   
-  bookAuthor?: string // Tornado opcional para evitar quebra se o backend não enviar
+  bookAuthor?: string 
   bookCoverUrl: string 
   borrowerName: string
   borrowerEmail: string
@@ -61,68 +65,84 @@ export function LoanManagement() {
   const [availableBooks, setAvailableBooks] = useState<BookOption[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  
+  // Dialogs
   const [showNewLoanDialog, setShowNewLoanDialog] = useState(false)
+  const [showReminderDialog, setShowReminderDialog] = useState(false) // Novo Modal de Cobrança
   
   // Filtros
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("active")
 
-  // Form States
+  // Form States - Novo Empréstimo
   const [selectedBookId, setSelectedBookId] = useState("")
   const [borrowerName, setBorrowerName] = useState("")
   const [borrowerEmail, setBorrowerEmail] = useState("")
   const [dueDate, setDueDate] = useState("")
   const [notes, setNotes] = useState("")
 
-  const { toast } = useToast()
-  const API_URL = process.env.NEXT_PUBLIC_API_URL
-  const USER_ID = 1
+  // Form States - Cobrança
+  const [loanToRemind, setLoanToRemind] = useState<Loan | null>(null)
+  const [reminderEmail, setReminderEmail] = useState("")
+  const [reminderMessage, setReminderMessage] = useState("")
 
-  // Função de busca isolada para permitir recarregamento manual
-  const fetchLoans = useCallback(async () => {
+  const { toast } = useToast()
+  const { userId } = useUserId() 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL
+
+  // --- 1. Busca de Dados Unificada ---
+  const refreshData = useCallback(async () => {
+    if (!userId) return
     setLoading(true)
+    
     try {
-      // Adicionado headers para evitar cache do navegador
-      const response = await fetch(`${API_URL}/api/v1/users/${USER_ID}/loans`, {
+      // A. Busca Empréstimos
+      const loansRes = await fetch(`${API_URL}/api/v1/users/${userId}/loans`, {
         headers: { 'Cache-Control': 'no-cache' } 
       })
-      if (response.ok) {
-        const data = await response.json()
-        setLoans(data)
+      
+      // B. Busca Biblioteca
+      const libraryRes = await fetch(`${API_URL}/api/v1/users/${userId}/library`)
+
+      if (loansRes.ok && libraryRes.ok) {
+        const loansData: Loan[] = await loansRes.json()
+        const libraryData = await libraryRes.json()
+
+        setLoans(loansData)
+
+        // --- CORREÇÃO DO FILTRO DE LIVROS ---
+        // Cria uma lista de IDs que estão atualmente emprestados (Status ACTIVE)
+        const activeLoanBookIds = loansData
+            .filter(l => l.status === 'ACTIVE')
+            .map(l => l.bookId)
+
+        // Filtra a biblioteca:
+        // 1. Deve ser TO_READ ou READ
+        // 2. NÃO deve estar na lista de activeLoanBookIds
+        const available = libraryData
+            .filter((item: any) => 
+                (item.status === 'TO_READ' || item.status === 'READ') && 
+                !activeLoanBookIds.includes(item.bookId)
+            )
+            .map((item: any) => ({
+                bookId: item.bookId,
+                title: item.title,
+                author: item.author
+            }))
+        
+        setAvailableBooks(available)
       }
     } catch (error) {
-      console.error("Erro ao buscar empréstimos:", error)
+      console.error("Erro ao carregar dados:", error)
       toast({ title: "Erro de conexão", variant: "destructive" })
     } finally {
       setLoading(false)
     }
-  }, [API_URL, USER_ID, toast])
+  }, [API_URL, userId, toast])
 
-  // --- Fetch Inicial ---
   useEffect(() => {
-    const fetchInitialData = async () => {
-      await fetchLoans()
-      
-      // Buscar livros disponíveis para empréstimo
-      try {
-        const libraryRes = await fetch(`${API_URL}/api/v1/users/${USER_ID}/library`)
-        if (libraryRes.ok) {
-           const libraryData = await libraryRes.json()
-           const myBooks = libraryData
-                .filter((item: any) => item.status !== 'WANT_TO_READ')
-                .map((item: any) => ({
-                    bookId: item.bookId,
-                    title: item.title,
-                    author: item.author
-                }))
-           setAvailableBooks(myBooks)
-        }
-      } catch (error) {
-        console.error("Erro ao buscar biblioteca:", error)
-      }
-    }
-    fetchInitialData()
-  }, [fetchLoans, API_URL, USER_ID])
+    refreshData()
+  }, [refreshData])
 
   // --- Lógica de Negócio ---
 
@@ -134,7 +154,6 @@ export function LoanManagement() {
   }
 
   const filteredLoans = loans.filter(loan => {
-    // Proteção contra valores nulos/undefined
     const borrower = loan.borrowerName?.toLowerCase() || "";
     const bookTitle = loan.bookTitle?.toLowerCase() || ""; 
     const query = searchQuery.toLowerCase();
@@ -159,13 +178,14 @@ export function LoanManagement() {
 
   const handleNewLoan = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!userId) return
     if (!selectedBookId) {
         toast({ title: "Selecione um livro", variant: "destructive" })
         return
     }
     setSubmitting(true)
     try {
-      const response = await fetch(`${API_URL}/api/v1/users/${USER_ID}/loans`, {
+      const response = await fetch(`${API_URL}/api/v1/users/${userId}/loans`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -180,14 +200,16 @@ export function LoanManagement() {
       if (response.ok) {
         toast({ title: "Sucesso", description: "Empréstimo registrado!" })
         setShowNewLoanDialog(false)
+        // Reset Form
         setBorrowerName("")
         setBorrowerEmail("")
         setDueDate("")
         setNotes("")
         setSelectedBookId("")
-        fetchLoans() // Recarrega a lista sem reload da página
+        refreshData() // Recarrega tudo
       } else {
-        toast({ title: "Erro ao criar", variant: "destructive" })
+        const err = await response.json()
+        toast({ title: "Erro", description: err.message || "Não foi possível registrar.", variant: "destructive" })
       }
     } catch (error) {
       toast({ title: "Erro de conexão", variant: "destructive" })
@@ -197,13 +219,14 @@ export function LoanManagement() {
   }
 
   const handleReturnBook = async (loanId: number) => {
+    if (!userId) return
     try {
-       const response = await fetch(`${API_URL}/api/v1/users/${USER_ID}/loans/${loanId}/return`, {
+       const response = await fetch(`${API_URL}/api/v1/users/${userId}/loans/${loanId}/return`, {
         method: "PATCH"
        })
        if (response.ok) {
          toast({ title: "Livro Devolvido!", description: "O status foi atualizado." })
-         fetchLoans()
+         refreshData()
        }
     } catch (error) {
         console.error(error)
@@ -211,7 +234,34 @@ export function LoanManagement() {
     }
   }
 
-  if (loading) return <div className="flex justify-center p-20"><Loader2 className="animate-spin text-primary h-10 w-10" /></div>
+  // --- 2. Lógica do Botão Cobrar ---
+  const openReminderDialog = (loan: Loan) => {
+      setLoanToRemind(loan)
+      setReminderEmail(loan.borrowerEmail || "")
+      setReminderMessage(`Olá ${loan.borrowerName}, gostaria de lembrar sobre a devolução do livro "${loan.bookTitle}".`)
+      setShowReminderDialog(true)
+  }
+
+  const handleSendReminder = () => {
+      if(!reminderEmail) {
+          toast({ title: "E-mail obrigatório", description: "Insira um e-mail para enviar a cobrança.", variant: "destructive" })
+          return
+      }
+      
+      // Aqui você conectaria com uma API real de email no futuro.
+      // Por enquanto, simulamos o envio.
+      setSubmitting(true)
+      setTimeout(() => {
+          setSubmitting(false)
+          setShowReminderDialog(false)
+          toast({ 
+              title: "Cobrança Enviada!", 
+              description: `E-mail enviado para ${reminderEmail}` 
+          })
+      }, 1000)
+  }
+
+  if (loading && loans.length === 0) return <div className="flex justify-center p-20"><Loader2 className="animate-spin text-primary h-10 w-10" /></div>
 
   return (
     <div className="space-y-8">
@@ -222,7 +272,7 @@ export function LoanManagement() {
                 <p className="text-muted-foreground">Controle todos os seus empréstimos de livros</p>
             </div>
             <div className="flex gap-2">
-                <Button variant="outline" size="icon" onClick={() => fetchLoans()} title="Atualizar lista">
+                <Button variant="outline" size="icon" onClick={() => refreshData()} title="Atualizar lista">
                     <RefreshCcw className="h-4 w-4" />
                 </Button>
                 <Dialog open={showNewLoanDialog} onOpenChange={setShowNewLoanDialog}>
@@ -244,11 +294,17 @@ export function LoanManagement() {
                                         <SelectValue placeholder="Selecione um livro..." />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {availableBooks.map((book) => (
-                                            <SelectItem key={book.bookId} value={book.bookId.toString()}>
-                                                {book.title}
-                                            </SelectItem>
-                                        ))}
+                                        {availableBooks.length === 0 ? (
+                                            <div className="p-2 text-xs text-muted-foreground text-center">
+                                                Todos os seus livros disponíveis já estão emprestados ou você não possui livros lidos/para ler.
+                                            </div>
+                                        ) : (
+                                            availableBooks.map((book) => (
+                                                <SelectItem key={book.bookId} value={book.bookId.toString()}>
+                                                    {book.title}
+                                                </SelectItem>
+                                            ))
+                                        )}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -364,7 +420,6 @@ export function LoanManagement() {
                                         <div>
                                             <h3 className="text-xl font-bold text-foreground mb-1">{loan.bookTitle}</h3>
                                             
-                                            {/* Renderiza autor apenas se existir */}
                                             {loan.bookAuthor && (
                                               <p className="text-sm text-muted-foreground mb-2">{loan.bookAuthor}</p>
                                             )}
@@ -413,7 +468,14 @@ export function LoanManagement() {
 
                                     {/* Ações */}
                                     <div className="flex justify-end gap-3 border-t pt-4 mt-2">
-                                        <Button variant="outline" size="sm" className="gap-2">
+                                        
+                                        {/* BOTÃO COBRAR CORRIGIDO */}
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            className="gap-2"
+                                            onClick={() => openReminderDialog(loan)}
+                                        >
                                             <MessageSquare className="h-4 w-4" /> Cobrar
                                         </Button>
                                         
@@ -435,6 +497,41 @@ export function LoanManagement() {
                 )})
             )}
         </div>
+
+        {/* 3. DIALOG DE COBRANÇA */}
+        <Dialog open={showReminderDialog} onOpenChange={setShowReminderDialog}>
+            <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                    <DialogTitle>Enviar Cobrança</DialogTitle>
+                    <DialogDescription>Envie um lembrete amigável por e-mail.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="space-y-2">
+                        <Label>Para:</Label>
+                        <Input 
+                            value={reminderEmail} 
+                            onChange={(e) => setReminderEmail(e.target.value)}
+                            placeholder="email@destino.com"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Mensagem:</Label>
+                        <Textarea 
+                            value={reminderMessage} 
+                            onChange={(e) => setReminderMessage(e.target.value)}
+                            rows={4}
+                        />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setShowReminderDialog(false)}>Cancelar</Button>
+                    <Button onClick={handleSendReminder} disabled={submitting}>
+                        {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                        Enviar Cobrança
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </div>
   )
 }

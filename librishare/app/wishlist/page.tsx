@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { DashboardHeader } from "@/components/dashboard/header"
 import { Card, CardContent } from "@/components/ui/card"
@@ -28,6 +28,7 @@ import {
 import Image from "next/image"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
+import { useUserId } from "@/hooks/use-user-id" // <--- 1. Importar o Hook
 
 interface WishlistBook {
   id: number
@@ -53,13 +54,17 @@ export default function WishlistPage() {
   const [newLink, setNewLink] = useState("")
 
   const { toast } = useToast()
+  const { userId } = useUserId() // <--- 2. Pegar ID dinâmico
   const API_URL = process.env.NEXT_PUBLIC_API_URL
-  const USER_ID = 1
 
-  const fetchWishlist = async () => {
+  // Envolver em useCallback para usar no useEffect
+  const fetchWishlist = useCallback(async () => {
+    if (!userId) return // <--- 3. Só busca se tiver ID
+
     try {
       setLoading(true)
-      const response = await fetch(`${API_URL}/api/v1/users/${USER_ID}/library`)
+      // <--- 4. Usar userId na URL
+      const response = await fetch(`${API_URL}/api/v1/users/${userId}/library`)
       
       if (response.ok) {
         const data = await response.json()
@@ -77,6 +82,7 @@ export default function WishlistPage() {
             purchaseUrl: ""
           }))
           
+        // Busca detalhes extras (preço/link) de cada livro
         const enrichedWishlist = await Promise.all(wishlist.map(async (book: any) => {
             try {
                 const bookRes = await fetch(`${API_URL}/api/v1/books/${book.bookId}`)
@@ -95,16 +101,23 @@ export default function WishlistPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [API_URL, userId])
 
   useEffect(() => {
     fetchWishlist()
-  }, [API_URL])
+  }, [fetchWishlist])
 
   const handleAddWish = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    if (!userId) {
+        toast({ title: "Erro", description: "Você precisa estar logado.", variant: "destructive" })
+        return
+    }
+
     setIsSubmitting(true)
     try {
+      // 1. Cria ou busca o livro no catálogo global
       const bookRes = await fetch(`${API_URL}/api/v1/books`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -121,21 +134,36 @@ export default function WishlistPage() {
       if (bookRes.ok) {
          const bookData = await bookRes.json()
          bookId = bookData.id
-      } else if (bookRes.status === 409) {
-          toast({ title: "Erro", description: "Livro já existe no catálogo.", variant: "destructive" })
+      } else {
+          // Se der erro 409 (já existe), tenta buscar pelo título (ou falha tratada)
+          // Simplificação: vamos assumir que se falhou é pq já existe ou dados inválidos
+          // O ideal seria o backend retornar o ID no 409 ou termos endpoint de busca.
+          // Para este fluxo rápido, vamos exibir erro se falhar na criação.
+          const err = await bookRes.json()
+          if(bookRes.status !== 409) { // Se for conflito, talvez o backend não retorne ID. 
+             toast({ title: "Erro", description: err.message || "Falha ao criar livro.", variant: "destructive" })
+             setIsSubmitting(false)
+             return;
+          }
+          // Se for conflito (já existe), precisariamos buscar o ID desse livro existente. 
+          // Como o endpoint de criação atual retorna erro no conflito em vez do objeto, 
+          // o usuário teria que buscar na lupa. 
+          // Mas vamos tentar adicionar mesmo assim se soubermos o ID (aqui não sabemos sem busca).
+          toast({ title: "Aviso", description: "Livro já existe no catálogo. Use a busca para adicionar.", variant: "warning" })
           setIsSubmitting(false)
           return;
       }
 
+      // 2. Adiciona à biblioteca do usuário (WANT_TO_READ)
       if (bookId) {
-          const libRes = await fetch(`${API_URL}/api/v1/users/${USER_ID}/library`, {
+          const libRes = await fetch(`${API_URL}/api/v1/users/${userId}/library`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ bookId: bookId, status: "WANT_TO_READ" })
           })
           
           if (libRes.ok) {
-              toast({ title: "Adicionado!" })
+              toast({ title: "Adicionado à Lista de Desejos!" })
               setNewTitle("")
               setNewAuthor("")
               setNewImage("")
@@ -143,10 +171,12 @@ export default function WishlistPage() {
               setNewLink("")
               setIsDialogOpen(false)
               fetchWishlist()
+          } else {
+              toast({ title: "Erro", description: "Falha ao adicionar à lista.", variant: "destructive" })
           }
       }
     } catch (error) {
-      toast({ title: "Erro", variant: "destructive" })
+      toast({ title: "Erro de conexão", variant: "destructive" })
     } finally {
       setIsSubmitting(false)
     }
@@ -155,16 +185,22 @@ export default function WishlistPage() {
   const handleDelete = async (e: React.MouseEvent, id: number) => {
       e.preventDefault()
       e.stopPropagation()
-      await fetch(`${API_URL}/api/v1/users/${USER_ID}/library/${id}`, { method: "DELETE" })
-      fetchWishlist()
-      toast({ title: "Removido." })
+      if (!userId) return
+
+      try {
+        await fetch(`${API_URL}/api/v1/users/${userId}/library/${id}`, { method: "DELETE" })
+        fetchWishlist()
+        toast({ title: "Removido da lista." })
+      } catch (error) {
+        toast({ title: "Erro ao remover", variant: "destructive" })
+      }
   }
 
   const handleBuyClick = (e: React.MouseEvent, url?: string) => {
       e.preventDefault()
       e.stopPropagation()
       if (url) window.open(url, '_blank')
-      else toast({ title: "Sem link", variant: "secondary" })
+      else toast({ title: "Sem link de compra", variant: "secondary" })
   }
 
   return (
@@ -252,8 +288,6 @@ export default function WishlistPage() {
              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {books.map(book => (
                     <Link href={`/books/${book.bookId}`} key={book.id} className="block group">
-                        {/* --- CORREÇÃO NO LAYOUT DO CARD --- */}
-                        {/* Removi a altura fixa (h-48) e adicionei min-height (min-h-[12rem]) para crescer se precisar */}
                         <Card className="flex flex-row overflow-hidden min-h-[12rem] hover:shadow-lg transition-all duration-200 cursor-pointer relative border-muted/60 bg-card hover:bg-accent/5">
                             
                             <div className="w-32 relative flex-shrink-0 flex items-center justify-center bg-transparent ml-3 my-3 rounded-md overflow-hidden">
@@ -279,7 +313,6 @@ export default function WishlistPage() {
                                     )}
                                 </div>
                                 
-                                {/* Botões alinhados no fundo com mais espaço */}
                                 <div className="flex gap-3 mt-4">
                                     <Button 
                                         size="sm" 
