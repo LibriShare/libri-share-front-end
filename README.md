@@ -1,6 +1,6 @@
 # 📚 LibriShare - Front-end
 
-![LibriShare Cover](librishare/public/placeholder-logo.png)
+![LibriShare Cover](librishare/public/images/librishare-logo.png)
 
 > **Sua biblioteca pessoal, reinventada.** > O LibriShare é uma plataforma open-source para organizar sua coleção de livros, acompanhar seu progresso de leitura e gerenciar empréstimos para amigos de forma simples e visual.
 
