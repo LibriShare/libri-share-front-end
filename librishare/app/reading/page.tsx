@@ -10,11 +10,11 @@ import { Clock, BookOpen, Calendar, Loader2, CheckCircle } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-import { useUserId } from "@/hooks/use-user-id" // <--- 1. Importar o Hook de ID
+import { useUserId } from "@/hooks/use-user-id"
 
 interface ReadingBook {
-  id: number       // ID do UserBook (vínculo)
-  bookId: number   // ID do Livro
+  id: number       
+  bookId: number 
   title: string
   author: string
   cover: string
@@ -29,21 +29,19 @@ export default function ReadingPage() {
   const [loading, setLoading] = useState(true)
   const { toast } = useToast()
   
-  const { userId } = useUserId() // <--- 2. Pegar o ID dinâmico do usuário logado
+  const { userId } = useUserId() 
   const API_URL = process.env.NEXT_PUBLIC_API_URL
 
   const fetchReadingBooks = useCallback(async () => {
-    if (!userId) return // <--- 3. Só busca se o ID existir
+    if (!userId) return 
 
     try {
       setLoading(true)
-      // <--- 4. Usar userId na URL
       const response = await fetch(`${API_URL}/api/v1/users/${userId}/library`)
       
       if (response.ok) {
         const data = await response.json()
         
-        // Filtra APENAS os livros com status "READING"
         const readingBooks = data
           .filter((item: any) => item.status === "READING")
           .map((item: any) => ({
@@ -55,7 +53,7 @@ export default function ReadingPage() {
             status: "reading",
             totalPages: item.totalPages || 0,
             pagesRead: item.currentPage || 0,
-            startDate: item.startedReadingAt || item.addedAt // Usa a data de início ou de adição
+            startDate: item.startedReadingAt || item.addedAt 
           }))
         
         setBooks(readingBooks)
@@ -84,7 +82,7 @@ export default function ReadingPage() {
 
       if (response.ok) {
         toast({ title: "Parabéns!", description: "Livro marcado como lido." })
-        fetchReadingBooks() // Recarrega a lista
+        fetchReadingBooks()
       } else {
         toast({ title: "Erro", description: "Não foi possível atualizar o status.", variant: "destructive" })
       }
@@ -158,7 +156,6 @@ export default function ReadingPage() {
                             </div>
                           </div>
 
-                          {/* Barra de Progresso */}
                           <div className="space-y-3">
                             <div>
                               <div className="flex justify-between items-center mb-2">

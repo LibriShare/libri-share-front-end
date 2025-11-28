@@ -1,12 +1,9 @@
-# Estágio 1: Build (Construção)
+
 FROM node:18-alpine AS build
 
-# --- ADICIONE ESTAS 2 LINHAS ---
-# 1. Declara o argumento que vamos receber do docker-compose
 ARG NEXT_PUBLIC_API_URL
-# 2. Define a variável de ambiente DENTRO do build
+
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
-# --- FIM DA ADIÇÃO ---
 
 RUN npm install -g pnpm
 WORKDIR /app
@@ -15,7 +12,6 @@ RUN pnpm install
 COPY . .
 RUN pnpm build
 
-# Estágio 2: Produção (Execução)
 FROM node:18-alpine
 RUN npm install -g pnpm
 WORKDIR /app

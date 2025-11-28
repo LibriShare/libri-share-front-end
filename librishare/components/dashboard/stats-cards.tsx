@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { BookOpen, Users, Clock, TrendingUp, Loader2, Heart } from "lucide-react"
-import { useUserId } from "@/hooks/use-user-id" // Importe o hook
+import { useUserId } from "@/hooks/use-user-id" 
 
 export function StatsCards() {
   const [stats, setStats] = useState({
@@ -13,7 +13,7 @@ export function StatsCards() {
     booksToRead: 0
   })
   const [loading, setLoading] = useState(true)
-  const { userId } = useUserId() // Hook seguro
+  const { userId } = useUserId() 
 
   useEffect(() => {
     if (!userId) {

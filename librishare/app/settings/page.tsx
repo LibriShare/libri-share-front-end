@@ -29,7 +29,6 @@ export default function SettingsPage() {
   const API_URL = process.env.NEXT_PUBLIC_API_URL
 
   const handleDeleteAccount = async () => {
-    // PEGA O ID DINÂMICO DO LOCALSTORAGE
     const userId = localStorage.getItem("librishare_user_id")
 
     if (!userId) {
@@ -44,7 +43,6 @@ export default function SettingsPage() {
       })
 
       if (response.ok) {
-        // Limpa o ID do navegador
         localStorage.removeItem("librishare_user_id")
         
         toast({ title: "Conta excluída", description: "Sua conta foi removida permanentemente." })
@@ -76,7 +74,6 @@ export default function SettingsPage() {
             </div>
 
             <div className="space-y-6">
-              {/* Danger Zone */}
               <Card className="border-red-900/50 bg-red-950/10">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-red-500">

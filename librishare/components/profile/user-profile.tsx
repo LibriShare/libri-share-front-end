@@ -129,20 +129,18 @@ export function UserProfile() {
             setActivity(Array.isArray(historyData) ? historyData : [])
         }
 
-        // --- CÁLCULOS DE ESTATÍSTICAS CORRIGIDOS ---
         const booksRead = Array.isArray(libraryData) ? libraryData.filter((b: any) => b.status === 'READ').length : 0;
         const currentlyReading = Array.isArray(libraryData) ? libraryData.filter((b: any) => b.status === 'READING').length : 0;
         const wishlist = Array.isArray(libraryData) ? libraryData.filter((b: any) => b.status === 'WANT_TO_READ').length : 0;
         const tbr = Array.isArray(libraryData) ? libraryData.filter((b: any) => b.status === 'TO_READ').length : 0;
 
         const statsCalc = {
-            // Total = Lidos + Lendo + Para Ler (Exclui Lista de Desejos)
             totalBooks: booksRead + currentlyReading + tbr, 
             booksRead: booksRead,
             currentlyReading: currentlyReading,
             wishlist: wishlist,
             readingGoal: userData.annualReadingGoal || 12,
-            booksThisYear: booksRead // Simplificação: conta total de lidos como "este ano"
+            booksThisYear: booksRead 
         }
         setStats(statsCalc)
 
@@ -256,7 +254,6 @@ export function UserProfile() {
 
   return (
     <div className="space-y-6">
-      {/* Profile Header */}
       <Card>
         <CardContent className="p-6">
           <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
@@ -345,7 +342,6 @@ export function UserProfile() {
         </CardContent>
       </Card>
 
-      {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -353,7 +349,6 @@ export function UserProfile() {
             <BookOpen className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            {/* Aqui mostramos o total calculado corretamente (sem wishlist) */}
             <div className="text-2xl font-bold">{stats.totalBooks}</div>
             <p className="text-xs text-muted-foreground">{stats.booksRead} lidos • {stats.currentlyReading} lendo</p>
           </CardContent>

@@ -26,7 +26,6 @@ export function LoginForm() {
     setIsLoading(true)
 
     try {
-      // CHAMADA REAL DE LOGIN
       const response = await fetch(`${API_URL}/api/v1/users/login`, {
         method: "POST",
         headers: {
@@ -46,7 +45,6 @@ export function LoginForm() {
         toast({ title: "Login realizado!", description: `Bem-vindo(a), ${userData.firstName}.` })
         window.location.href = "/dashboard"
       } else {
-        // Erro 401 (Bad Credentials)
         const err = await response.json()
         toast({ 
           title: "Erro de acesso", 

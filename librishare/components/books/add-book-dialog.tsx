@@ -18,7 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Plus, Search, BookOpen, Link as LinkIcon, ImageIcon } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
-import { useUserId } from "@/hooks/use-user-id" // <--- 1. Importei o Hook
+import { useUserId } from "@/hooks/use-user-id" 
 
 interface AddBookDialogProps {
   trigger?: React.ReactNode
@@ -31,7 +31,7 @@ export function AddBookDialog({ trigger }: AddBookDialogProps) {
   const [searchQuery, setSearchQuery] = useState("")
   
   const { toast } = useToast()
-  const { userId } = useUserId() // <--- 2. Pegando o ID real do usuário
+  const { userId } = useUserId() 
   const API_URL = process.env.NEXT_PUBLIC_API_URL
 
   const handleSearch = async () => {
@@ -58,14 +58,12 @@ export function AddBookDialog({ trigger }: AddBookDialogProps) {
   }
 
   const addToLibrary = async (bookId: number) => {
-    // <--- 3. Validação de segurança
     if (!userId) {
         toast({ title: "Erro", description: "Você precisa estar logado.", variant: "destructive" })
         return
     }
 
     try {
-      // <--- 4. URL dinâmica com userId
       const response = await fetch(`${API_URL}/api/v1/users/${userId}/library`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -143,7 +141,6 @@ export function AddBookDialog({ trigger }: AddBookDialogProps) {
         )}
       </DialogTrigger>
       
-      {/* Mantive o layout largo e baixo que você pediu */}
       <DialogContent className="max-w-6xl max-h-[95vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Adicionar Novo Livro</DialogTitle>
@@ -169,7 +166,6 @@ export function AddBookDialog({ trigger }: AddBookDialogProps) {
               
               <CardContent className="px-0 flex-1 flex flex-col overflow-hidden space-y-4">
                 <div className="flex gap-2 shrink-0">
-                  {/* Mantive a borda bonita no input */}
                   <Input
                     placeholder="Digite o título, autor ou ISBN..."
                     value={searchQuery}

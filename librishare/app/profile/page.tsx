@@ -6,12 +6,10 @@ export default function ProfilePage() {
   return (
     <div className="flex h-screen bg-background w-full">
       
-      {/* Sidebar fixa à esquerda */}
       <div className="hidden lg:block">
         <Sidebar />
       </div>
 
-      {/* Área de Conteúdo */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <DashboardHeader />
 

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea" // Importei Textarea
+import { Textarea } from "@/components/ui/textarea" 
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogDescription,
-  DialogFooter // Importei Footer
+  DialogFooter 
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -30,14 +30,13 @@ import {
   Calendar as CalendarIcon,
   Mail,
   RefreshCcw,
-  Send // Importei Send
+  Send 
 } from "lucide-react"
 import { format, isPast, parseISO, differenceInDays } from "date-fns"
 import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
 import { useUserId } from "@/hooks/use-user-id"
 
-// --- Interfaces ---
 interface BookOption {
   bookId: number
   title: string
@@ -90,18 +89,15 @@ export function LoanManagement() {
   const { userId } = useUserId() 
   const API_URL = process.env.NEXT_PUBLIC_API_URL
 
-  // --- 1. Busca de Dados Unificada ---
   const refreshData = useCallback(async () => {
     if (!userId) return
     setLoading(true)
     
     try {
-      // A. Busca Empréstimos
       const loansRes = await fetch(`${API_URL}/api/v1/users/${userId}/loans`, {
         headers: { 'Cache-Control': 'no-cache' } 
       })
       
-      // B. Busca Biblioteca
       const libraryRes = await fetch(`${API_URL}/api/v1/users/${userId}/library`)
 
       if (loansRes.ok && libraryRes.ok) {
@@ -110,15 +106,10 @@ export function LoanManagement() {
 
         setLoans(loansData)
 
-        // --- CORREÇÃO DO FILTRO DE LIVROS ---
-        // Cria uma lista de IDs que estão atualmente emprestados (Status ACTIVE)
         const activeLoanBookIds = loansData
             .filter(l => l.status === 'ACTIVE')
             .map(l => l.bookId)
 
-        // Filtra a biblioteca:
-        // 1. Deve ser TO_READ ou READ
-        // 2. NÃO deve estar na lista de activeLoanBookIds
         const available = libraryData
             .filter((item: any) => 
                 (item.status === 'TO_READ' || item.status === 'READ') && 
@@ -144,7 +135,6 @@ export function LoanManagement() {
     refreshData()
   }, [refreshData])
 
-  // --- Lógica de Negócio ---
 
   const isOverdue = (loan: Loan) => {
     if (!loan.dueDate) return false
@@ -174,7 +164,6 @@ export function LoanManagement() {
     total: loans.length
   }
 
-  // --- Handlers ---
 
   const handleNewLoan = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -200,13 +189,12 @@ export function LoanManagement() {
       if (response.ok) {
         toast({ title: "Sucesso", description: "Empréstimo registrado!" })
         setShowNewLoanDialog(false)
-        // Reset Form
         setBorrowerName("")
         setBorrowerEmail("")
         setDueDate("")
         setNotes("")
         setSelectedBookId("")
-        refreshData() // Recarrega tudo
+        refreshData() 
       } else {
         const err = await response.json()
         toast({ title: "Erro", description: err.message || "Não foi possível registrar.", variant: "destructive" })
@@ -234,7 +222,6 @@ export function LoanManagement() {
     }
   }
 
-  // --- 2. Lógica do Botão Cobrar ---
   const openReminderDialog = (loan: Loan) => {
       setLoanToRemind(loan)
       setReminderEmail(loan.borrowerEmail || "")
@@ -247,9 +234,7 @@ export function LoanManagement() {
           toast({ title: "E-mail obrigatório", description: "Insira um e-mail para enviar a cobrança.", variant: "destructive" })
           return
       }
-      
-      // Aqui você conectaria com uma API real de email no futuro.
-      // Por enquanto, simulamos o envio.
+
       setSubmitting(true)
       setTimeout(() => {
           setSubmitting(false)
@@ -265,7 +250,6 @@ export function LoanManagement() {
 
   return (
     <div className="space-y-8">
-        {/* Header da Página */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
                 <h2 className="text-3xl font-bold tracking-tight">Gerenciar Empréstimos</h2>
@@ -336,7 +320,6 @@ export function LoanManagement() {
             </div>
         </div>
 
-        {/* Cards de Resumo */}
         <div className="grid gap-4 md:grid-cols-3">
             <Card className="bg-card border-muted">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -367,7 +350,6 @@ export function LoanManagement() {
             </Card>
         </div>
 
-        {/* Filtros e Lista */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="relative w-full md:w-96">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

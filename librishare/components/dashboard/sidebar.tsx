@@ -16,8 +16,7 @@ import {
   User 
 } from "lucide-react"
 import { useEffect, useState } from "react"
-import { useUserId } from "@/hooks/use-user-id" // Importe o hook
-
+import { useUserId } from "@/hooks/use-user-id" 
 interface LibraryStats {
   totalBooks: number
   booksRead: number
@@ -28,7 +27,7 @@ interface LibraryStats {
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { userId } = useUserId() // Usa o hook seguro
+  const { userId } = useUserId() 
   const [stats, setStats] = useState<LibraryStats>({
     totalBooks: 0,
     booksRead: 0,
@@ -40,7 +39,6 @@ export function Sidebar() {
   const API_URL = process.env.NEXT_PUBLIC_API_URL
 
   useEffect(() => {
-    // Só busca se tivermos um userId válido
     if (!userId) return
 
     const fetchStats = async () => {

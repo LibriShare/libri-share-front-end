@@ -7,7 +7,6 @@ import { Star, Calendar, BookOpen, ArrowLeft, Heart, MessageCircle, Share2 } fro
 import Link from "next/link"
 import Image from "next/image"
 
-// Mock data - in a real app, this would come from a database
 const getReadBookById = (id: string) => {
   const books = {
     "1": {
@@ -70,7 +69,6 @@ export default function ReadBookDetailsPage({ params }: { params: { id: string }
 
         <main className="flex-1 px-4 py-8">
           <div className="max-w-4xl mx-auto space-y-6">
-            {/* Back Button */}
             <Link
               href="/read"
               className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
@@ -79,7 +77,6 @@ export default function ReadBookDetailsPage({ params }: { params: { id: string }
               Voltar para Livros Lidos
             </Link>
 
-            {/* Book Header */}
             <div className="flex gap-6">
               <div className="flex-shrink-0">
                 <Image
@@ -132,7 +129,6 @@ export default function ReadBookDetailsPage({ params }: { params: { id: string }
               </div>
             </div>
 
-            {/* Review and Rating */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
@@ -164,7 +160,6 @@ export default function ReadBookDetailsPage({ params }: { params: { id: string }
               </CardContent>
             </Card>
 
-            {/* Book Details */}
             <div className="grid gap-6 md:grid-cols-2">
               <Card>
                 <CardHeader>
@@ -210,7 +205,6 @@ export default function ReadBookDetailsPage({ params }: { params: { id: string }
               </Card>
             </div>
 
-            {/* Notes and Quotes */}
             <div className="grid gap-6 md:grid-cols-2">
               <Card>
                 <CardHeader>

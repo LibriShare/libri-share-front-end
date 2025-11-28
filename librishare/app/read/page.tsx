@@ -9,11 +9,11 @@ import { Star, Calendar, BookOpen, Loader2, RotateCcw } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-import { useUserId } from "@/hooks/use-user-id" // <--- 1. Importar o Hook
+import { useUserId } from "@/hooks/use-user-id" 
 
 interface ReadBook {
-  id: number       // UserBook ID
-  bookId: number   // Book ID
+  id: number    
+  bookId: number  
   title: string
   author: string
   cover: string
@@ -28,16 +28,14 @@ export default function ReadPage() {
   const [loading, setLoading] = useState(true)
   const { toast } = useToast()
   
-  const { userId } = useUserId() // <--- 2. Pegar ID dinâmico
+  const { userId } = useUserId() 
   const API_URL = process.env.NEXT_PUBLIC_API_URL
 
-  // Envolver em useCallback para usar no useEffect
   const fetchReadBooks = useCallback(async () => {
-    if (!userId) return // <--- 3. Só busca se tiver ID
+    if (!userId) return 
 
     try {
       setLoading(true)
-      // <--- 4. Usar userId na URL
       const response = await fetch(`${API_URL}/api/v1/users/${userId}/library`)
       
       if (response.ok) {
@@ -52,7 +50,7 @@ export default function ReadPage() {
             author: item.author,
             cover: item.coverImageUrl || "/placeholder.svg",
             rating: item.rating || 0,
-            finishedDate: item.finishedReadingAt || item.addedAt, // Fallback se não tiver data de término
+            finishedDate: item.finishedReadingAt || item.addedAt, 
             pages: item.totalPages || 0,
             review: item.review || "Sem resenha.",
           }))
@@ -70,12 +68,10 @@ export default function ReadPage() {
     fetchReadBooks()
   }, [fetchReadBooks])
 
-  // Função para Reler (muda status para LENDO e zera progresso opcionalmente)
   const handleReread = async (userBookId: number) => {
     if (!userId) return
 
     try {
-       // 1. Muda status para READING
        const responseStatus = await fetch(`${API_URL}/api/v1/users/${userId}/library/${userBookId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -83,7 +79,6 @@ export default function ReadPage() {
       })
 
       if (responseStatus.ok) {
-         // 2. Opcional: Resetar páginas lidas para 0
          await fetch(`${API_URL}/api/v1/users/${userId}/library/${userBookId}/progress`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
@@ -91,7 +86,7 @@ export default function ReadPage() {
          })
 
          toast({ title: "Boa leitura!", description: "Livro movido para 'Lendo Agora'." })
-         fetchReadBooks() // Remove da lista de lidos
+         fetchReadBooks() 
       }
     } catch (error) {
         toast({ title: "Erro", description: "Não foi possível iniciar releitura.", variant: "destructive" })

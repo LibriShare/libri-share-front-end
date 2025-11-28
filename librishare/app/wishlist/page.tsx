@@ -28,7 +28,7 @@ import {
 import Image from "next/image"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-import { useUserId } from "@/hooks/use-user-id" // <--- 1. Importar o Hook
+import { useUserId } from "@/hooks/use-user-id" 
 
 interface WishlistBook {
   id: number
@@ -54,16 +54,14 @@ export default function WishlistPage() {
   const [newLink, setNewLink] = useState("")
 
   const { toast } = useToast()
-  const { userId } = useUserId() // <--- 2. Pegar ID dinâmico
+  const { userId } = useUserId() 
   const API_URL = process.env.NEXT_PUBLIC_API_URL
 
-  // Envolver em useCallback para usar no useEffect
   const fetchWishlist = useCallback(async () => {
-    if (!userId) return // <--- 3. Só busca se tiver ID
+    if (!userId) return 
 
     try {
       setLoading(true)
-      // <--- 4. Usar userId na URL
       const response = await fetch(`${API_URL}/api/v1/users/${userId}/library`)
       
       if (response.ok) {
@@ -82,7 +80,6 @@ export default function WishlistPage() {
             purchaseUrl: ""
           }))
           
-        // Busca detalhes extras (preço/link) de cada livro
         const enrichedWishlist = await Promise.all(wishlist.map(async (book: any) => {
             try {
                 const bookRes = await fetch(`${API_URL}/api/v1/books/${book.bookId}`)
@@ -117,7 +114,6 @@ export default function WishlistPage() {
 
     setIsSubmitting(true)
     try {
-      // 1. Cria ou busca o livro no catálogo global
       const bookRes = await fetch(`${API_URL}/api/v1/books`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -135,26 +131,18 @@ export default function WishlistPage() {
          const bookData = await bookRes.json()
          bookId = bookData.id
       } else {
-          // Se der erro 409 (já existe), tenta buscar pelo título (ou falha tratada)
-          // Simplificação: vamos assumir que se falhou é pq já existe ou dados inválidos
-          // O ideal seria o backend retornar o ID no 409 ou termos endpoint de busca.
-          // Para este fluxo rápido, vamos exibir erro se falhar na criação.
           const err = await bookRes.json()
-          if(bookRes.status !== 409) { // Se for conflito, talvez o backend não retorne ID. 
+          if(bookRes.status !== 409) { 
              toast({ title: "Erro", description: err.message || "Falha ao criar livro.", variant: "destructive" })
              setIsSubmitting(false)
              return;
           }
-          // Se for conflito (já existe), precisariamos buscar o ID desse livro existente. 
-          // Como o endpoint de criação atual retorna erro no conflito em vez do objeto, 
-          // o usuário teria que buscar na lupa. 
-          // Mas vamos tentar adicionar mesmo assim se soubermos o ID (aqui não sabemos sem busca).
+
           toast({ title: "Aviso", description: "Livro já existe no catálogo. Use a busca para adicionar.", variant: "warning" })
           setIsSubmitting(false)
           return;
       }
 
-      // 2. Adiciona à biblioteca do usuário (WANT_TO_READ)
       if (bookId) {
           const libRes = await fetch(`${API_URL}/api/v1/users/${userId}/library`, {
             method: "POST",

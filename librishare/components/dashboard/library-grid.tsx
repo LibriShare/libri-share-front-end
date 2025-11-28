@@ -10,7 +10,7 @@ import { Search, Grid, List, Star, Clock, CheckCircle, BookOpen, Loader2, Bookma
 import Link from "next/link"
 import Image from "next/image"
 import { useToast } from "@/hooks/use-toast"
-import { useUserId } from "@/hooks/use-user-id" // Importe o Hook de ID
+import { useUserId } from "@/hooks/use-user-id" 
 
 interface Book {
   id: string
@@ -32,18 +32,15 @@ export function LibraryGrid() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const { toast } = useToast()
   
-  // Usa o ID dinâmico
   const { userId } = useUserId() 
   const API_URL = process.env.NEXT_PUBLIC_API_URL
 
   useEffect(() => {
-    // Só busca se tiver ID
     if (!userId) return 
 
     const fetchLibrary = async () => {
       try {
         setLoading(true)
-        // Usa userId da variável
         const response = await fetch(`${API_URL}/api/v1/users/${userId}/library`)
         if (response.ok) {
           const data = await response.json()
@@ -71,7 +68,7 @@ export function LibraryGrid() {
     }
 
     fetchLibrary()
-  }, [userId, API_URL]) // Recarrega quando o userId muda
+  }, [userId, API_URL])
 
   const mapStatus = (backendStatus: string): "read" | "reading" | "tbr" => {
     switch (backendStatus) {
@@ -90,7 +87,6 @@ export function LibraryGrid() {
     return matchesSearch && matchesStatus
   })
 
-  // ... (MANTENHA AS FUNÇÕES getStatusIcon, getStatusLabel, getStatusColor, renderStars IGUAIS) ...
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "read": return <CheckCircle className="h-4 w-4 text-secondary" />
